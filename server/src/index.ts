@@ -8,6 +8,7 @@ import { pool } from "./db";
 import { documentRouter } from "./modules/document/routes";
 import { resumeQueue } from "./modules/worker/queue";
 import { chatRouter } from "./modules/chat/routes";
+import { conversationRouter } from "./modules/conversation/routes";
 import { ragRouter } from "./modules/rag/routes";
 import { knowledgeBaseRouter } from "./modules/knowledge-base/routes";
 
@@ -28,6 +29,7 @@ app.use("/api/knowledge-bases", knowledgeBaseRouter);
 app.use("/api", documentRouter);
 app.use("/api", ragRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/conversations", conversationRouter);
 
 // 兜底错误处理：未预期的异常统一返回 JSON，细节只写日志
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -7,19 +7,44 @@ import {
   Plus,
   Search,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 import { MyRuntimeProvider } from "@/MyRuntimeProvider";
 
+// 按更新日期把对话分成 今天 / 昨天 / 更早
+const dayGroup = (iso: string) => {
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86400000);
+  return days <= 0 ? "今天" : days === 1 ? "昨天" : "更早";
+};
+
 export function ChatPage() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDto[]>([]);
-  const { knowledgeBaseId, setKnowledgeBaseId, sources } = useChatStore();
+  const {
+    knowledgeBaseId,
+    setKnowledgeBaseId,
+    sources,
+    conversations,
+    conversationId,
+    threadKey,
+    initialMessages,
+    loadConversations,
+    openConversation,
+    newConversation,
+    removeConversation,
+  } = useChatStore();
 
   useEffect(() => {
     listKnowledgeBases().then(setKnowledgeBases).catch(console.error);
-  }, []);
+    loadConversations().catch(console.error);
+  }, [loadConversations]);
+
+  const groups = ["今天", "昨天", "更早"]
+    .map((label) => ({ label, items: conversations.filter((item) => dayGroup(item.updatedAt) === label) }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div className="chat-page">
@@ -40,7 +65,7 @@ export function ChatPage() {
           </select>
         </label>
         <p>回答将优先基于你已导入的资料</p>
-        <button className="chat-new-button" type="button">
+        <button className="chat-new-button" type="button" onClick={newConversation}>
           <Plus size={16} /> 新建对话
         </button>
       </div>
@@ -52,31 +77,39 @@ export function ChatPage() {
               <Search size={16} />
             </button>
           </div>
-          <div className="conversation-group">
-            <p>今天</p>
-            <button className="conversation-item is-selected" type="button">
-              <MessageSquareText size={15} />
-              <span>Transformer 的注意力机制</span>
-            </button>
-            <button className="conversation-item" type="button">
-              <MessageSquareText size={15} />
-              <span>RAG 的检索效果如何优化？</span>
-            </button>
-          </div>
-          <div className="conversation-group">
-            <p>昨天</p>
-            <button className="conversation-item" type="button">
-              <MessageSquareText size={15} />
-              <span>整理深度学习学习路径</span>
-            </button>
-            <button className="conversation-item" type="button">
-              <MessageSquareText size={15} />
-              <span>总结这篇论文的关键结论</span>
-            </button>
-          </div>
+          {groups.length === 0 && <p className="conversation-empty">还没有对话，提问后会自动保存在这里。</p>}
+          {groups.map((group) => (
+            <div className="conversation-group" key={group.label}>
+              <p>{group.label}</p>
+              {group.items.map((item) => (
+                <div className="conversation-row" key={item.id}>
+                  <button
+                    className={`conversation-item${item.id === conversationId ? " is-selected" : ""}`}
+                    type="button"
+                    onClick={() => openConversation(item.id).catch(console.error)}
+                  >
+                    <MessageSquareText size={15} />
+                    <span>{item.title}</span>
+                  </button>
+                  <button
+                    className="conversation-delete"
+                    type="button"
+                    aria-label={`删除对话 ${item.title}`}
+                    onClick={() => {
+                      if (window.confirm(`确定删除对话“${item.title}”吗？删除后无法恢复。`)) {
+                        removeConversation(item.id).catch(console.error);
+                      }
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
         </aside>
         <section className="chat-thread-shell" aria-label="AI 对话">
-          <MyRuntimeProvider>
+          <MyRuntimeProvider key={threadKey} initialMessages={initialMessages}>
             <Thread components={{ Welcome: ChatWelcome }} />
           </MyRuntimeProvider>
         </section>

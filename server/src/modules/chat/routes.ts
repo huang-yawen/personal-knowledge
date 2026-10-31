@@ -1,9 +1,17 @@
 import { Router, type Response } from "express";
 import { config } from "../../config";
-import { parseKnowledgeBaseId, retrieveChunks, type RetrievedChunk } from "../rag/retrieve";
+import { parseOptionalId, retrieveChunks, type RetrievedChunk } from "../rag/retrieve";
+import {
+  conversationExists,
+  createConversation,
+  makeTitle,
+  saveAssistantMessage,
+  syncMessages,
+  touchConversation,
+  type ChatMessage,
+} from "../conversation/repository";
 import { buildSystemPrompt, NO_MATERIAL_REPLY } from "./prompt";
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
 type Usage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 
 // 模型服务返回的错误，文案可以直接展示给用户
@@ -82,13 +90,18 @@ export const chatRouter = Router();
 chatRouter.post("/", async (req, res) => {
   const body = (typeof req.body === "object" && req.body !== null ? req.body : {}) as Record<string, unknown>;
   const messages = parseMessages(body.messages);
-  const knowledgeBaseId = parseKnowledgeBaseId(body.knowledgeBaseId);
+  const knowledgeBaseId = parseOptionalId(body.knowledgeBaseId);
+  const conversationId = parseOptionalId(body.conversationId);
   if (!messages) {
     res.status(400).json({ error: `消息格式不正确（最后一条需为用户消息，单条不超过 ${config.chat.maxMessageChars} 字）` });
     return;
   }
-  if (knowledgeBaseId === "invalid") {
-    res.status(400).json({ error: "知识库范围不正确" });
+  if (knowledgeBaseId === "invalid" || conversationId === "invalid") {
+    res.status(400).json({ error: "知识库范围或对话 id 不正确" });
+    return;
+  }
+  if (conversationId !== undefined && !(await conversationExists(conversationId))) {
+    res.status(404).json({ error: "对话不存在" });
     return;
   }
 
@@ -109,18 +122,31 @@ chatRouter.post("/", async (req, res) => {
   let topScore: number | undefined;
   let usage: Usage | undefined;
   try {
+    // 先落库：保存用户的提问，并让库里的历史与界面一致（含重新生成、编辑后重发的情况）
+    const activeConversationId =
+      conversationId ?? (await createConversation(makeTitle(messages.find((m) => m.role === "user")?.content ?? ""), knowledgeBaseId));
+    await syncMessages(activeConversationId, messages);
+    await touchConversation(activeConversationId, knowledgeBaseId);
+    writeEvent(res, { type: "conversation", id: activeConversationId });
+
     const chunks = await retrieveChunks(question, { knowledgeBaseId });
     hits = chunks.length;
     topScore = chunks[0]?.score;
-    writeEvent(res, { type: "sources", sources: chunks.map((chunk, index) => ({ index: index + 1, ...chunk })) });
+    const sources = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
+    writeEvent(res, { type: "sources", sources });
 
+    let answer = "";
+    const onDelta = (text: string) => {
+      answer += text;
+      writeEvent(res, { type: "delta", text });
+    };
     if (chunks.length === 0) {
-      writeEvent(res, { type: "delta", text: NO_MATERIAL_REPLY });
+      onDelta(NO_MATERIAL_REPLY);
     } else {
-      usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, controller.signal, (text) =>
-        writeEvent(res, { type: "delta", text }),
-      );
+      usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, controller.signal, onDelta);
     }
+    // 回答完整结束后才保存；中途停止的不入库，下次发送时界面历史会带上它
+    if (answer) await saveAssistantMessage(activeConversationId, answer, sources);
     writeEvent(res, { type: "done", usage });
   } catch (error) {
     if (!controller.signal.aborted) {

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { parseKnowledgeBaseId, retrieveChunks } from "./retrieve";
+import { parseOptionalId, retrieveChunks } from "./retrieve";
 
 export const ragRouter = Router();
 
@@ -7,7 +7,7 @@ export const ragRouter = Router();
 ragRouter.post("/search", async (req, res) => {
   const body = (typeof req.body === "object" && req.body !== null ? req.body : {}) as Record<string, unknown>;
   const query = typeof body.query === "string" ? body.query.trim() : "";
-  const knowledgeBaseId = parseKnowledgeBaseId(body.knowledgeBaseId);
+  const knowledgeBaseId = parseOptionalId(body.knowledgeBaseId);
   const limit = body.limit === undefined ? undefined : Number(body.limit);
 
   if (!query || query.length > 500) {

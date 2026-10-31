@@ -13,8 +13,8 @@ export type RetrievedChunk = {
   score: number;
 };
 
-// 请求里的知识库范围：不传或 null 表示全部；非法值返回 "invalid"
-export const parseKnowledgeBaseId = (value: unknown): number | undefined | "invalid" => {
+// 请求里的可选 id（如知识库范围）：不传或 null 表示未指定；非法值返回 "invalid"
+export const parseOptionalId = (value: unknown): number | undefined | "invalid" => {
   if (value === undefined || value === null) return undefined;
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : "invalid";
 };

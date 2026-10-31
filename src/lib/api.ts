@@ -61,6 +61,7 @@ export type ChatSource = {
 };
 
 export type ChatEvent =
+  | { type: "conversation"; id: number }
   | { type: "sources"; sources: ChatSource[] }
   | { type: "delta"; text: string }
   | { type: "done" }
@@ -70,12 +71,13 @@ export type ChatEvent =
 export async function* streamChat(
   messages: { role: "user" | "assistant"; content: string }[],
   knowledgeBaseId: number | null,
+  conversationId: number | null,
   signal: AbortSignal,
 ): AsyncGenerator<ChatEvent> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, knowledgeBaseId }),
+    body: JSON.stringify({ messages, knowledgeBaseId, conversationId }),
     signal,
   });
   if (!response.ok || !response.body) {
@@ -98,3 +100,21 @@ export async function* streamChat(
     }
   }
 }
+
+export type ConversationDto = {
+  id: number;
+  title: string;
+  knowledgeBaseId: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationDetailDto = ConversationDto & {
+  messages: { id: number; role: "user" | "assistant"; content: string; citations: ChatSource[] | null }[];
+};
+
+export const listConversations = () => request<ConversationDto[]>("/conversations");
+
+export const getConversation = (id: number) => request<ConversationDetailDto>(`/conversations/${id}`);
+
+export const deleteConversation = (id: number) => request<void>(`/conversations/${id}`, { method: "DELETE" });

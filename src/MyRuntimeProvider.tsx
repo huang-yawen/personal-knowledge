@@ -3,15 +3,18 @@ import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   type ChatModelAdapter,
+  type ThreadMessageLike,
 } from "@assistant-ui/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { streamChat } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 
-// 调用后端 /api/chat：先收到引用来源，再逐段收到回答文字
+// 调用后端 /api/chat：先收到对话 id 和引用来源，再逐段收到回答文字
 const chatAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const { knowledgeBaseId, setSources } = useChatStore.getState();
+    const { knowledgeBaseId, conversationId, threadKey, setSources, setConversationId } = useChatStore.getState();
+    // 回答期间用户可能切换了对话，旧回答不能再写入新对话的状态
+    const isCurrentThread = () => useChatStore.getState().threadKey === threadKey;
     setSources([]);
 
     const history = messages.flatMap((message) => {
@@ -24,17 +27,23 @@ const chatAdapter: ChatModelAdapter = {
     });
 
     let text = "";
-    for await (const event of streamChat(history, knowledgeBaseId, abortSignal)) {
-      if (event.type === "sources") setSources(event.sources);
-      else if (event.type === "delta") {
+    for await (const event of streamChat(history, knowledgeBaseId, conversationId, abortSignal)) {
+      if (event.type === "conversation") {
+        if (isCurrentThread()) setConversationId(event.id);
+      } else if (event.type === "sources") {
+        if (isCurrentThread()) setSources(event.sources);
+      } else if (event.type === "delta") {
         text += event.text;
         yield { content: [{ type: "text", text }] };
+      } else if (event.type === "done") {
+        // 刷新列表，让新对话出现、标题和排序更新
+        useChatStore.getState().loadConversations().catch(console.error);
       } else if (event.type === "error") throw new Error(event.message);
     }
   },
 };
 
-export function MyRuntimeProvider({ children }: { children: ReactNode }) {
-  const runtime = useLocalRuntime(chatAdapter);
+export function MyRuntimeProvider({ children, initialMessages }: { children: ReactNode; initialMessages: ThreadMessageLike[] }) {
+  const runtime = useLocalRuntime(chatAdapter, { initialMessages });
   return <AssistantRuntimeProvider runtime={runtime}><TooltipProvider>{children}</TooltipProvider></AssistantRuntimeProvider>;
 }
