@@ -49,3 +49,52 @@ export const uploadDocument = (knowledgeBaseId: number, file: File) => {
 };
 
 export const deleteDocument = (id: number) => request<void>(`/documents/${id}`, { method: "DELETE" });
+
+export type ChatSource = {
+  index: number;
+  chunkId: number;
+  documentId: number;
+  documentName: string;
+  page: number | null;
+  content: string;
+  score: number;
+};
+
+export type ChatEvent =
+  | { type: "sources"; sources: ChatSource[] }
+  | { type: "delta"; text: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
+// 读取问答接口的 SSE 流，逐个产出事件
+export async function* streamChat(
+  messages: { role: "user" | "assistant"; content: string }[],
+  knowledgeBaseId: number | null,
+  signal: AbortSignal,
+): AsyncGenerator<ChatEvent> {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, knowledgeBaseId }),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `请求失败（${response.status}）`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // 事件之间以空行分隔
+    for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
+      const block = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      if (block.startsWith("data:")) yield JSON.parse(block.slice(5).trim()) as ChatEvent;
+    }
+  }
+}

@@ -15,6 +15,13 @@ export const config = {
     model: required("EMBEDDING_MODEL"),
     dimensions: Number(required("EMBEDDING_DIMENSIONS")),
   },
+  deepseek: {
+    apiKey: required("DEEPSEEK_API_KEY"),
+    baseUrl: required("DEEPSEEK_BASE_URL").replace(/\/+$/, ""),
+    model: required("DEEPSEEK_MODEL"),
+  },
+  retrieval: { topK: 5 },
+  chat: { maxHistoryMessages: 10, maxAnswerTokens: 2000, maxMessageChars: 4000 },
   qdrant: {
     url: required("QDRANT_URL").replace(/\/+$/, ""),
     collection: "personal_knowledge_chunks",

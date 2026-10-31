@@ -82,3 +82,22 @@ export const deleteVectors = async (field: "document_id" | "knowledge_base_id", 
   });
   if (!response.ok) throw await failed("删除向量", response);
 };
+
+export type SearchHit = { score: number; payload: ChunkPoint["payload"] };
+
+// 检索总是先按用户过滤，再按知识库过滤（不传则搜索全部知识库）
+export const searchPoints = async (vector: number[], options: { knowledgeBaseId?: number; limit: number }) => {
+  await ensureCollection();
+  const must: object[] = [{ key: "user_id", match: { value: config.devUserId } }];
+  if (options.knowledgeBaseId !== undefined) {
+    must.push({ key: "knowledge_base_id", match: { value: options.knowledgeBaseId } });
+  }
+  const response = await request("POST", `/collections/${collection}/points/query`, {
+    query: vector,
+    limit: options.limit,
+    with_payload: true,
+    filter: { must },
+  });
+  if (!response.ok) throw await failed("检索", response);
+  return ((await response.json()) as { result: { points: SearchHit[] } }).result.points;
+};

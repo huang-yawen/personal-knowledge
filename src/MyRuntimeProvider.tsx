@@ -5,33 +5,36 @@ import {
   type ChatModelAdapter,
 } from "@assistant-ui/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { streamChat } from "@/lib/api";
+import { useChatStore } from "@/lib/chat-store";
 
-// Local adapter used while the DeepSeek + RAG SSE endpoint is not connected.
-// Its contract matches the future streaming adapter, so the UI needs no rewrite.
-const localModelAdapter: ChatModelAdapter = {
+// 调用后端 /api/chat：先收到引用来源，再逐段收到回答文字
+const chatAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const last = messages[messages.length - 1];
-    const userText =
-      last?.content
-        ?.filter((content) => content.type === "text")
-        .map((content) => content.text)
-        .join("") ?? "";
+    const { knowledgeBaseId, setSources } = useChatStore.getState();
+    setSources([]);
 
-    const reply = userText.trim()
-      ? `我收到了你的问题：**${userText}**\n\n当前是 Personal Knowledge 的本地 AI 对话演示。接入 RAG 服务后，我会先从你选择的知识库中检索相关片段，再基于资料生成带引用的回答。\n\n你可以继续追问，或在上方选择知识库范围。`
-      : "你好！我是 Personal Knowledge 助手。选择知识库后，我可以基于你的资料协助检索、理解和整理知识。";
+    const history = messages.flatMap((message) => {
+      if (message.role !== "user" && message.role !== "assistant") return [];
+      const content = message.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("");
+      return content ? [{ role: message.role, content }] : [];
+    });
 
     let text = "";
-    for (const character of reply) {
-      if (abortSignal?.aborted) return;
-      text += character;
-      yield { content: [{ type: "text", text }] };
-      await new Promise((resolve) => setTimeout(resolve, 8));
+    for await (const event of streamChat(history, knowledgeBaseId, abortSignal)) {
+      if (event.type === "sources") setSources(event.sources);
+      else if (event.type === "delta") {
+        text += event.text;
+        yield { content: [{ type: "text", text }] };
+      } else if (event.type === "error") throw new Error(event.message);
     }
   },
 };
 
 export function MyRuntimeProvider({ children }: { children: ReactNode }) {
-  const runtime = useLocalRuntime(localModelAdapter);
+  const runtime = useLocalRuntime(chatAdapter);
   return <AssistantRuntimeProvider runtime={runtime}><TooltipProvider>{children}</TooltipProvider></AssistantRuntimeProvider>;
 }

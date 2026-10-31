@@ -1,6 +1,6 @@
+import { useEffect, useState } from "react";
 import {
   BookOpen,
-  ChevronRight,
   LibraryBig,
   MessageSquareText,
   MoreHorizontal,
@@ -9,17 +9,36 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
+import { useChatStore } from "@/lib/chat-store";
 import { MyRuntimeProvider } from "@/MyRuntimeProvider";
 
 export function ChatPage() {
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDto[]>([]);
+  const { knowledgeBaseId, setKnowledgeBaseId, sources } = useChatStore();
+
+  useEffect(() => {
+    listKnowledgeBases().then(setKnowledgeBases).catch(console.error);
+  }, []);
+
   return (
     <div className="chat-page">
       <div className="chat-toolbar">
-        <button className="library-selector" type="button">
+        <label className="library-selector">
           <LibraryBig size={16} />
-          <span>全部知识库</span>
-          <ChevronRight size={15} />
-        </button>
+          <select
+            aria-label="知识库范围"
+            value={knowledgeBaseId ?? ""}
+            onChange={(event) => setKnowledgeBaseId(event.target.value ? Number(event.target.value) : null)}
+          >
+            <option value="">全部知识库</option>
+            {knowledgeBases.map((base) => (
+              <option key={base.id} value={base.id}>
+                {base.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <p>回答将优先基于你已导入的资料</p>
         <button className="chat-new-button" type="button">
           <Plus size={16} /> 新建对话
@@ -68,13 +87,30 @@ export function ChatPage() {
               <MoreHorizontal size={18} />
             </button>
           </div>
-          <div className="citation-empty">
-            <span className="citation-empty-icon">
-              <BookOpen size={19} />
-            </span>
-            <h3>等待引用来源</h3>
-            <p>在知识库范围内提问后，相关的资料来源会在这里呈现。</p>
-          </div>
+          {sources.length > 0 ? (
+            <div className="citation-list">
+              {sources.map((source) => (
+                <details className="citation-item" key={source.chunkId}>
+                  <summary>
+                    <span className="citation-index">{source.index}</span>
+                    <span className="citation-title">{source.documentName}</span>
+                    <small>
+                      {source.page ? `第 ${source.page} 页 · ` : ""}相似度 {source.score.toFixed(2)}
+                    </small>
+                  </summary>
+                  <p>{source.content}</p>
+                </details>
+              ))}
+            </div>
+          ) : (
+            <div className="citation-empty">
+              <span className="citation-empty-icon">
+                <BookOpen size={19} />
+              </span>
+              <h3>等待引用来源</h3>
+              <p>在知识库范围内提问后，相关的资料来源会在这里呈现。</p>
+            </div>
+          )}
           <div className="chat-tips">
             <Sparkles size={16} />
             <p>小提示：选择特定知识库可以让回答更加聚焦。</p>
