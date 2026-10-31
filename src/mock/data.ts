@@ -1,4 +1,4 @@
-import { Archive, FileText, GraduationCap, LibraryBig, MessageSquareText, Upload } from "lucide-react";
+import { Archive, FileText, LibraryBig, MessageSquareText, Upload } from "lucide-react";
 import type { KnowledgeBase, Note } from "@/types";
 
 export const initialKnowledgeBases: KnowledgeBase[] = [
@@ -19,7 +19,6 @@ export const metrics = [
   { label: "知识库", value: "12", detail: "较上月 +2", icon: LibraryBig, color: "blue" },
   { label: "文档", value: "286", detail: "本周新增 14", icon: Archive, color: "orange" },
   { label: "笔记", value: "74", detail: "本周编辑 9", icon: FileText, color: "purple" },
-  { label: "待复习", value: "18", detail: "今天待完成", icon: GraduationCap, color: "green" },
 ];
 
 export const activities = [

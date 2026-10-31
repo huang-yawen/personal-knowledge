@@ -21,7 +21,10 @@ const navItems: NavItem[] = [
 ];
 
 function App() {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("工作台");
@@ -29,6 +32,11 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
+
+  const changeTheme = (dark: boolean) => {
+    setIsDark(dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  };
 
   const currentTitle = activeNav;
 
@@ -92,14 +100,14 @@ function App() {
           <div className="topbar-actions">
             <button className="icon-button search-button" type="button" aria-label="搜索"><Search size={19} /><span>搜索</span><kbd>⌘ K</kbd></button>
             <button className="icon-button" type="button" aria-label="通知"><Bell size={19} /></button>
-            <button className="icon-button" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => setIsDark((value) => !value)}>
+            <button className="icon-button" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => changeTheme(!isDark)}>
               {isDark ? <Sun size={19} /> : <Moon size={19} />}
             </button>
             <button className="create-button" type="button"><Plus size={18} /> <span>新建</span></button>
           </div>
         </header>
 
-        {activeNav === "工作台" ? <Dashboard /> : activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : activeNav === "我的笔记" ? <NotesPage /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={setIsDark} /> : <PlaceholderPage page={activeNav} />}
+        {activeNav === "工作台" ? <Dashboard /> : activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : activeNav === "我的笔记" ? <NotesPage /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
       </main>
 
       <button className="sidebar-toggle" type="button" aria-label="折叠侧边栏" onClick={() => setIsCollapsed((value) => !value)}>

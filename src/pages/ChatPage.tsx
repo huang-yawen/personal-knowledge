@@ -35,7 +35,7 @@ function ChatWelcome() {
       <span className="chat-welcome-mark"><Sparkles size={21} /></span>
       <h2>今天想探索什么？</h2>
       <p>我可以基于你的知识库回答问题、解释概念，或帮你整理思路。</p>
-      <div className="prompt-grid"><span>总结一篇资料的核心观点</span><span>解释一个复杂概念</span><span>从笔记中提炼复习要点</span><span>比较两个相关的技术方案</span></div>
+      <div className="prompt-grid"><span>总结一篇资料的核心观点</span><span>解释一个复杂概念</span><span>从笔记中提炼关键要点</span><span>比较两个相关的技术方案</span></div>
     </div>
   );
 }

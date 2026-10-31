@@ -21,7 +21,7 @@ export function NotesPage() {
     setIsPreview(false);
     setAiDraft(null);
   };
-  const createAiDraft = () => setAiDraft(`# ${selectedNote.title}\n\n## 核心摘要\n\n${selectedNote.content.replace(/^#.*\n?/, "").split("\n").filter(Boolean).slice(0, 3).join(" ")}\n\n## 建议的后续行动\n\n- 补充可验证的资料来源\n- 把关键概念转化为复习卡片\n- 在下一次复习时更新理解\n`);
+  const createAiDraft = () => setAiDraft(`# ${selectedNote.title}\n\n## 核心摘要\n\n${selectedNote.content.replace(/^#.*\n?/, "").split("\n").filter(Boolean).slice(0, 3).join(" ")}\n\n## 建议的后续行动\n\n- 补充可验证的资料来源\n- 在下一次回顾时更新理解\n`);
 
   return (
     <div className="notes-page">
@@ -40,7 +40,7 @@ export function NotesPage() {
           {isPreview ? <article className="markdown-preview"><MarkdownPreview content={selectedNote.content} /></article> : <textarea className="note-editor" value={selectedNote.content} onChange={(event) => updateNote(event.target.value)} spellCheck />}
         </section>
 
-        <aside className="note-ai-panel"><div className="note-ai-heading"><span><WandSparkles size={16} /></span><div><strong>AI 笔记辅助</strong><p>基于当前笔记生成候选内容</p></div></div><div className="ai-actions"><button type="button" onClick={createAiDraft}>总结笔记</button><button type="button" onClick={createAiDraft}>提取知识点</button><button type="button" onClick={createAiDraft}>优化表达</button><button type="button" onClick={createAiDraft}>生成复习卡片</button></div>{aiDraft ? <div className="ai-draft"><p className="section-kicker">AI 生成草稿</p><div className="ai-draft-content"><MarkdownPreview content={aiDraft} /></div><div className="ai-draft-actions"><button type="button" onClick={() => setAiDraft(null)}>保留原文</button><button type="button" className="accept-draft" onClick={() => { updateNote(aiDraft); setAiDraft(null); }}>应用草稿 <Check size={14} /></button></div></div> : <div className="ai-guidance"><Sparkles size={17} /><p>AI 的修改始终以草稿形式展示，需要你确认后才会覆盖笔记内容。</p></div>}</aside>
+        <aside className="note-ai-panel"><div className="note-ai-heading"><span><WandSparkles size={16} /></span><div><strong>AI 笔记辅助</strong><p>基于当前笔记生成候选内容</p></div></div><div className="ai-actions"><button type="button" onClick={createAiDraft}>总结笔记</button><button type="button" onClick={createAiDraft}>提取知识点</button><button type="button" onClick={createAiDraft}>优化表达</button></div>{aiDraft ? <div className="ai-draft"><p className="section-kicker">AI 生成草稿</p><div className="ai-draft-content"><MarkdownPreview content={aiDraft} /></div><div className="ai-draft-actions"><button type="button" onClick={() => setAiDraft(null)}>保留原文</button><button type="button" className="accept-draft" onClick={() => { updateNote(aiDraft); setAiDraft(null); }}>应用草稿 <Check size={14} /></button></div></div> : <div className="ai-guidance"><Sparkles size={17} /><p>AI 的修改始终以草稿形式展示，需要你确认后才会覆盖笔记内容。</p></div>}</aside>
       </div>
     </div>
   );

@@ -54,14 +54,6 @@ export function Dashboard() {
             {activities.map(({ icon: Icon, color, title, detail }) => <div className="activity-item" key={title}><span className={`activity-icon ${color}`}><Icon size={15} /></span><p><strong>{title}</strong><small>{detail}</small></p></div>)}
           </div>
         </article>
-
-        <article className="panel review-panel">
-          <div className="panel-heading"><div><p className="section-kicker">今日复习</p><h2>18 张卡片等待你</h2></div><span className="review-count">18</span></div>
-          <p className="review-copy">完成今天的复习，继续巩固正在构建的知识网络。</p>
-          <div className="review-progress"><span style={{ width: "38%" }} /></div>
-          <div className="review-meta"><span>已完成 7 张</span><span>预计 8 分钟</span></div>
-          <button className="review-button" type="button">开始复习 <ArrowUpRight size={17} /></button>
-        </article>
       </section>
     </div>
   );
