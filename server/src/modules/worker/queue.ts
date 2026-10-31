@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
+import { embedTexts } from "../rag/embedding";
+import { deleteVectors, upsertPoints } from "../rag/qdrant";
 import { chunkText } from "./chunk";
 import { parseFile } from "./parse";
 
@@ -11,7 +14,30 @@ let running = false;
 
 const setStatus = (id: number, status: string) => pool.query("UPDATE documents SET status = ? WHERE id = ?", [status, id]);
 
-// 解析 → 分块 → 写入 document_chunks。向量化尚未接入，成功后停在 embedding 状态
+// 为文档的所有分块生成向量并写入 Qdrant；先清掉该文档可能残留的旧向量，重复处理不会产生重复数据
+const embedChunks = async (id: number, userId: number, knowledgeBaseId: number) => {
+  const [chunks] = await pool.query<RowDataPacket[]>(
+    "SELECT id, content, page_number, vector_point_id FROM document_chunks WHERE document_id = ? ORDER BY chunk_index",
+    [id],
+  );
+  const vectors = await embedTexts(chunks.map((chunk) => chunk.content as string));
+  await deleteVectors("document_id", id);
+  await upsertPoints(
+    chunks.map((chunk, index) => ({
+      id: chunk.vector_point_id as string,
+      vector: vectors[index],
+      payload: {
+        user_id: userId,
+        knowledge_base_id: knowledgeBaseId,
+        document_id: id,
+        chunk_id: chunk.id as number,
+        page_number: chunk.page_number as number | null,
+      },
+    })),
+  );
+};
+
+// 解析 → 分块 → 写入 document_chunks → 向量化写入 Qdrant，全部成功后状态为 done
 const processDocument = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>(
     "SELECT user_id, knowledge_base_id, stored_path, mime_type FROM documents WHERE id = ?",
@@ -28,7 +54,7 @@ const processDocument = async (id: number) => {
     const values: (number | string | null)[][] = [];
     for (const { page, text } of pages) {
       for (const content of chunkText(text)) {
-        values.push([doc.user_id, doc.knowledge_base_id, id, values.length, content, page]);
+        values.push([doc.user_id, doc.knowledge_base_id, id, values.length, content, page, randomUUID()]);
       }
     }
     if (values.length === 0) throw new Error("未提取到文本，可能是扫描版 PDF 或空文件");
@@ -40,7 +66,7 @@ const processDocument = async (id: number) => {
       await conn.query("DELETE FROM document_chunks WHERE document_id = ?", [id]);
       for (let i = 0; i < values.length; i += INSERT_BATCH) {
         await conn.query(
-          "INSERT INTO document_chunks (user_id, knowledge_base_id, document_id, chunk_index, content, page_number) VALUES ?",
+          "INSERT INTO document_chunks (user_id, knowledge_base_id, document_id, chunk_index, content, page_number, vector_point_id) VALUES ?",
           [values.slice(i, i + INSERT_BATCH)],
         );
       }
@@ -52,6 +78,13 @@ const processDocument = async (id: number) => {
     } finally {
       conn.release();
     }
+
+    try {
+      await embedChunks(id, doc.user_id, doc.knowledge_base_id);
+    } catch (error) {
+      throw new Error(`向量化失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+    await setStatus(id, "done");
   } catch (error) {
     console.error(`文档 ${id} 处理失败`, error);
     const message = error instanceof Error ? error.message : String(error);
@@ -78,9 +111,9 @@ export const enqueue = (id: number) => {
   void drain();
 };
 
-// 服务重启后，把中断在“等待 / 解析中”的文档重新排队
+// 服务重启后，把中断在“等待 / 解析中 / 向量化中”的文档重新排队
 export const resumeQueue = async () => {
-  await pool.query("UPDATE documents SET status = 'pending' WHERE status = 'parsing'");
+  await pool.query("UPDATE documents SET status = 'pending' WHERE status IN ('parsing', 'embedding')");
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM documents WHERE status = 'pending' ORDER BY id");
   for (const row of rows) enqueue(row.id as number);
 };

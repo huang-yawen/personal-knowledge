@@ -86,8 +86,8 @@ export function KnowledgePage() {
     };
   }, [selectedBaseId]);
 
-  // 向量化接入后，需要把 embedding 状态也加入轮询
-  const hasActiveDocument = visibleDocuments.some((item) => item.status === "pending" || item.status === "parsing");
+  // 排队、解析、向量化中的文档会自动变化，需要轮询；完成或失败后停止
+  const hasActiveDocument = visibleDocuments.some((item) => ["pending", "parsing", "embedding"].includes(item.status));
 
   useEffect(() => {
     if (selectedBaseId === undefined || !hasActiveDocument) return;

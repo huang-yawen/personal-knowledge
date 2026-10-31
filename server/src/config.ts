@@ -9,6 +9,16 @@ const required = (name: string): string => {
 
 export const config = {
   port: Number(process.env.PORT ?? 3001),
+  embedding: {
+    apiKey: required("EMBEDDING_API_KEY"),
+    baseUrl: required("EMBEDDING_BASE_URL").replace(/\/+$/, ""),
+    model: required("EMBEDDING_MODEL"),
+    dimensions: Number(required("EMBEDDING_DIMENSIONS")),
+  },
+  qdrant: {
+    url: required("QDRANT_URL").replace(/\/+$/, ""),
+    collection: "personal_knowledge_chunks",
+  },
   uploadDir: path.resolve(import.meta.dirname, "..", "uploads"),
   maxFileBytes: 20 * 1024 * 1024,
   maxDocsPerKnowledgeBase: 100,

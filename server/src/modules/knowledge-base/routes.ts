@@ -4,6 +4,7 @@ import { Router } from "express";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
+import { deleteVectors } from "../rag/qdrant";
 
 type KnowledgeBaseRow = RowDataPacket & {
   id: number;
@@ -120,5 +121,6 @@ knowledgeBaseRouter.delete("/:id", async (req, res) => {
   }
   // 记录由外键级联删除，磁盘上的文件需要单独清理
   await rm(path.join(config.uploadDir, String(config.devUserId), String(id)), { recursive: true, force: true });
+  await deleteVectors("knowledge_base_id", id as number).catch((error: unknown) => console.error("删除向量失败", error));
   res.status(204).end();
 });
