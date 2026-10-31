@@ -1,9 +1,11 @@
 export type KnowledgeDocument = {
+  id: number;
   name: string;
   type: string;
   size: string;
   updated: string;
   status: "完成" | "处理中" | "等待处理" | "处理失败";
+  errorMessage: string | null;
 };
 
 export type KnowledgeBase = {
@@ -13,7 +15,6 @@ export type KnowledgeBase = {
   documents: number;
   updated: string;
   cover: "blue" | "purple" | "orange" | "green";
-  items: KnowledgeDocument[];
 };
 
 export type Note = {

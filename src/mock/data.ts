@@ -1,12 +1,5 @@
 import { Archive, FileText, LibraryBig, MessageSquareText, Upload } from "lucide-react";
-import type { KnowledgeBase, Note } from "@/types";
-
-export const initialKnowledgeBases: KnowledgeBase[] = [
-  { id: 1, name: "机器学习", description: "深度学习、模型训练与工程实践", documents: 37, updated: "今天更新", cover: "blue", items: [{ name: "Deep Learning Notes.pdf", type: "PDF", size: "8.4 MB", updated: "今天", status: "完成" }, { name: "Transformer Architecture.md", type: "MD", size: "42 KB", updated: "昨天", status: "完成" }, { name: "attention-is-all-you-need.pdf", type: "PDF", size: "2.1 MB", updated: "10 月 28 日", status: "处理中" }] },
-  { id: 2, name: "产品与设计", description: "产品思考、交互设计与用户研究", documents: 24, updated: "昨天更新", cover: "purple", items: [{ name: "Design systems handbook.md", type: "MD", size: "36 KB", updated: "昨天", status: "完成" }, { name: "用户访谈记录.txt", type: "TXT", size: "18 KB", updated: "10 月 26 日", status: "完成" }] },
-  { id: 3, name: "个人成长", description: "阅读、思考与长期学习笔记", documents: 18, updated: "3 天前更新", cover: "orange", items: [{ name: "年度阅读清单.md", type: "MD", size: "12 KB", updated: "10 月 21 日", status: "完成" }] },
-  { id: 4, name: "软件工程", description: "架构、代码与项目复盘资料", documents: 42, updated: "上周更新", cover: "green", items: [{ name: "Clean Architecture.pdf", type: "PDF", size: "5.7 MB", updated: "10 月 18 日", status: "完成" }] },
-];
+import type { Note } from "@/types";
 
 export const initialNotes: Note[] = [
   { id: 1, title: "RAG 检索优化", category: "机器学习", tags: ["RAG", "检索"], updated: "12 分钟前", content: "# RAG 检索优化\n\n检索增强生成的效果，通常取决于 **数据质量、切块策略和检索排序** 三个层面。\n\n## 核心思路\n\n- 使用语义完整的文本分段，而不是固定长度截断\n- 在向量检索前加入元数据过滤\n- 对初步召回的内容使用 rerank 重排序\n\n> 回答必须可以回溯到真实的原始资料。\n\n## 下一步\n\n补充不同 chunk size 对召回效果的实验记录。" },

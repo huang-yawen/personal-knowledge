@@ -1,26 +1,55 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, CheckCircle2, CircleAlert, FileUp, LibraryBig, MoreHorizontal, Plus, Search, Settings2, Sparkles, Upload, X } from "lucide-react";
-import { createKnowledgeBase as createKnowledgeBaseApi, listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
+import { ChevronRight, CheckCircle2, CircleAlert, FileUp, LibraryBig, MoreHorizontal, Plus, Search, Settings2, Sparkles, Trash2, Upload, X } from "lucide-react";
+import {
+  createKnowledgeBase as createKnowledgeBaseApi,
+  deleteDocument,
+  listDocuments,
+  listKnowledgeBases,
+  uploadDocument,
+  type DocumentDto,
+  type KnowledgeBaseDto,
+} from "@/lib/api";
 import type { KnowledgeBase, KnowledgeDocument } from "@/types";
 
 const covers = ["blue", "purple", "orange", "green"] as const;
 
-// 按日历天数把更新时间转成“今天更新 / 3 天前更新”
-const formatUpdated = (iso: string) => {
+// 按日历天数把时间转成“今天 / 昨天 / 3 天前”
+const formatDay = (iso: string) => {
   const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86400000);
-  return days <= 0 ? "今天更新" : days === 1 ? "昨天更新" : `${days} 天前更新`;
+  return days <= 0 ? "今天" : days === 1 ? "昨天" : `${days} 天前`;
 };
 
-// 后端暂无封面与文档明细，封面按 id 轮换，文档列表先留空
+const formatSize = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+// 后端状态对应页面上的中文状态；解析和向量化阶段统一显示“处理中”
+const statusLabels: Record<DocumentDto["status"], KnowledgeDocument["status"]> = {
+  pending: "等待处理",
+  parsing: "处理中",
+  embedding: "处理中",
+  done: "完成",
+  failed: "处理失败",
+};
+
+const toDocument = (dto: DocumentDto): KnowledgeDocument => ({
+  id: dto.id,
+  name: dto.name,
+  type: dto.name.split(".").pop()?.toUpperCase() ?? "文件",
+  size: formatSize(dto.sizeBytes),
+  updated: formatDay(dto.updatedAt),
+  status: statusLabels[dto.status],
+  errorMessage: dto.errorMessage,
+});
+
+// 后端暂无封面字段，封面按 id 轮换
 const toKnowledgeBase = (dto: KnowledgeBaseDto): KnowledgeBase => ({
   id: dto.id,
   name: dto.name,
   description: dto.description || "尚未添加描述",
   documents: dto.documentCount,
-  updated: formatUpdated(dto.updatedAt),
+  updated: `${formatDay(dto.updatedAt)}更新`,
   cover: covers[dto.id % covers.length],
-  items: [],
 });
 
 export function KnowledgePage() {
@@ -28,6 +57,7 @@ export function KnowledgePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [documents, setDocuments] = useState<DocumentDto[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -39,6 +69,39 @@ export function KnowledgePage() {
       .catch((reason: Error) => setError(reason.message))
       .finally(() => setIsLoading(false));
   }, []);
+
+  const selectedBaseId = selectedBase?.id;
+
+  // 只展示属于当前知识库的文档，切换知识库或上传途中切换时不会串到别的列表
+  const visibleDocuments = documents.filter((item) => item.knowledgeBaseId === selectedBaseId);
+
+  useEffect(() => {
+    if (selectedBaseId === undefined) return;
+    let cancelled = false;
+    listDocuments(selectedBaseId)
+      .then((list) => !cancelled && setDocuments(list))
+      .catch((reason: Error) => setError(reason.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedBaseId]);
+
+  // 向量化接入后，需要把 embedding 状态也加入轮询
+  const hasActiveDocument = visibleDocuments.some((item) => item.status === "pending" || item.status === "parsing");
+
+  useEffect(() => {
+    if (selectedBaseId === undefined || !hasActiveDocument) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      listDocuments(selectedBaseId)
+        .then((list) => !cancelled && setDocuments(list))
+        .catch((reason: Error) => setError(reason.message));
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedBaseId, hasActiveDocument]);
 
   const createKnowledgeBase = async () => {
     const name = newName.trim();
@@ -56,13 +119,27 @@ export function KnowledgePage() {
     }
   };
 
-  const addDocument = (selectedBase: KnowledgeBase, file: File) => {
-    const fileType = file.name.split(".").pop()?.toUpperCase() ?? "文件";
-    const newDocument: KnowledgeDocument = { name: file.name, type: fileType, size: `${Math.max(file.size / 1024 / 1024, 0.1).toFixed(1)} MB`, updated: "刚刚上传", status: "等待处理" };
-    const updateStatus = (status: KnowledgeDocument["status"]) => setKnowledgeBases((items) => items.map((base) => base.id !== selectedBase.id ? base : { ...base, updated: "刚刚更新", items: base.items.map((document) => document.name === file.name ? { ...document, status } : document) }));
-    setKnowledgeBases((items) => items.map((base) => base.id !== selectedBase.id ? base : { ...base, updated: "刚刚更新", documents: base.documents + 1, items: [newDocument, ...base.items] }));
-    window.setTimeout(() => updateStatus("处理中"), 700);
-    window.setTimeout(() => updateStatus("完成"), 2300);
+  const addDocument = async (base: KnowledgeBase, file: File) => {
+    try {
+      const created = await uploadDocument(base.id, file);
+      setDocuments((items) => [created, ...items]);
+      setKnowledgeBases((items) => items.map((item) => (item.id === base.id ? { ...item, documents: item.documents + 1, updated: "今天更新" } : item)));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "上传失败");
+    }
+  };
+
+  const removeDocument = async (base: KnowledgeBase, document: KnowledgeDocument) => {
+    if (!window.confirm(`确定删除“${document.name}”吗？删除后无法恢复。`)) return;
+    try {
+      await deleteDocument(document.id);
+      setDocuments((items) => items.filter((item) => item.id !== document.id));
+      setKnowledgeBases((items) => items.map((item) => (item.id === base.id ? { ...item, documents: item.documents - 1 } : item)));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "删除失败");
+    }
   };
 
   return (
@@ -71,10 +148,10 @@ export function KnowledgePage() {
         <div><p className="eyebrow">个人资料空间</p><h2>我的知识库</h2><p>将资料沉淀为可检索、可连接的长期知识资产。</p></div>
         <button className="knowledge-create" type="button" onClick={() => setIsCreateOpen(true)}><Plus size={17} /> 创建知识库</button>
       </div>
+      {error && !isCreateOpen && <p className="form-error" role="alert">{error}</p>}
       <div className="knowledge-layout">
         <section className="knowledge-list-section">
           <div className="knowledge-list-tools"><div className="knowledge-search"><Search size={16} /><span>搜索知识库</span></div><button type="button" aria-label="筛选知识库"><Settings2 size={16} /></button></div>
-          {error && !isCreateOpen && <p className="form-error" role="alert">{error}</p>}
           <div className="knowledge-card-list">
             {knowledgeBases.map((base) => <button key={base.id} type="button" className={`knowledge-card${base.id === selectedBase?.id ? " selected" : ""}`} onClick={() => setSelectedId(base.id)}><span className={`knowledge-cover ${base.cover}`}><LibraryBig size={20} /></span><span className="knowledge-card-copy"><strong>{base.name}</strong><small>{base.documents} 份资料 · {base.updated}</small></span><ChevronRight size={17} /></button>)}
           </div>
@@ -84,7 +161,7 @@ export function KnowledgePage() {
         <section className="knowledge-detail-section">
           <header className="knowledge-detail-head"><div className="knowledge-detail-title"><span className={`knowledge-cover large ${selectedBase.cover}`}><LibraryBig size={23} /></span><div><h3>{selectedBase.name}</h3><p>{selectedBase.description}</p></div></div><button type="button" className="detail-more" aria-label="知识库更多选项"><MoreHorizontal size={19} /></button></header>
           <div className="document-toolbar"><div><strong>资料</strong><span>{selectedBase.documents} 个文档</span></div><label className="upload-button"><FileUp size={16} /> 上传资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>
-          {selectedBase.items.length > 0 ? <div className="document-list">{selectedBase.items.map((document) => <article className="document-row" key={`${document.name}-${document.updated}`}><span className={`file-type ${document.type.toLowerCase()}`}>{document.type}</span><div className="document-copy"><strong>{document.name}</strong><small>{document.size} · 更新于 {document.updated}</small></div><DocumentStatus status={document.status} /><button type="button" className="document-more" aria-label={`${document.name} 更多操作`}><MoreHorizontal size={18} /></button></article>)}</div> : <div className="documents-empty"><span><Upload size={21} /></span><h3>还没有资料</h3><p>上传 PDF、Markdown 或 TXT 文件，开始构建可检索的知识库。</p><label className="upload-button secondary"><FileUp size={16} /> 上传第一份资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>}
+          {visibleDocuments.length > 0 ? <div className="document-list">{visibleDocuments.map(toDocument).map((document) => <article className="document-row" key={document.id}><span className={`file-type ${document.type.toLowerCase()}`}>{document.type}</span><div className="document-copy"><strong>{document.name}</strong><small>{document.status === "处理失败" && document.errorMessage ? document.errorMessage : `${document.size} · 更新于 ${document.updated}`}</small></div><DocumentStatus status={document.status} /><button type="button" className="document-more" aria-label={`删除 ${document.name}`} onClick={() => removeDocument(selectedBase, document)}><Trash2 size={17} /></button></article>)}</div> : <div className="documents-empty"><span><Upload size={21} /></span><h3>还没有资料</h3><p>上传 PDF、Markdown 或 TXT 文件，开始构建可检索的知识库。</p><label className="upload-button secondary"><FileUp size={16} /> 上传第一份资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>}
           <div className="processing-note"><Sparkles size={15} /><span>文件上传后会自动解析、分段并建立检索索引。处理完成后即可用于 AI 对话。</span></div>
         </section>
         ) : (
