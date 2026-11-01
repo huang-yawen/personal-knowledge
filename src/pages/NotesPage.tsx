@@ -1,60 +1,133 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bold,
   Check,
   Code2,
   FilePlus2,
   List,
-  MoreHorizontal,
   PencilLine,
   Search,
   Sparkles,
   Tag,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
-import { initialNotes } from "@/mock/data";
-import type { Note } from "@/types";
+import { createNote, deleteNote, getNote, listNotes, updateNote, type NoteDto, type NoteListItemDto } from "@/lib/api";
+
+const AUTOSAVE_DELAY_MS = 800;
+
+// 把 ISO 时间显示为“刚刚 / N 分钟前 / 日期”
+const formatTime = (iso: string) => {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+  return new Date(iso).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+};
+
+const toListItem = (note: NoteDto): NoteListItemDto => ({ ...note, preview: note.content.slice(0, 200) });
 
 export function NotesPage() {
-  const [notes, setNotes] = useState(initialNotes);
-  const [selectedId, setSelectedId] = useState(1);
+  const [notes, setNotes] = useState<NoteListItemDto[]>([]);
+  const [current, setCurrent] = useState<NoteDto | null>(null);
   const [query, setQuery] = useState("");
   const [isPreview, setIsPreview] = useState(false);
   const [aiDraft, setAiDraft] = useState<string | null>(null);
   const [isAiOpen, setIsAiOpen] = useState(false);
-  const selectedNote = notes.find((note) => note.id === selectedId) ?? notes[0];
-  const visibleNotes = notes.filter((note) =>
-    `${note.title} ${note.category} ${note.tags.join(" ")}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const [error, setError] = useState<string | null>(null);
+  // 待保存的改动与保存队列：队列保证同一笔记的保存请求按顺序发出，不会被慢请求反超
+  const pending = useRef<{ id: number; title?: string; content?: string } | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const queue = useRef<Promise<void>>(Promise.resolve());
 
-  const updateNote = (content: string) =>
-    setNotes((items) =>
-      items.map((note) =>
-        note.id === selectedNote.id
-          ? { ...note, content, updated: "刚刚" }
-          : note,
-      ),
-    );
-  const newNote = () => {
-    const id = Math.max(...notes.map((note) => note.id), 0) + 1;
-    const note: Note = {
-      id,
-      title: "未命名笔记",
-      content: "# 未命名笔记\n\n开始记录你的想法…",
-      category: "未分类",
-      tags: [],
-      updated: "刚刚",
-    };
-    setNotes((items) => [note, ...items]);
-    setSelectedId(id);
-    setIsPreview(false);
-    setAiDraft(null);
+  const flush = useCallback((): Promise<void> => {
+    window.clearTimeout(timer.current);
+    const job = pending.current;
+    if (!job) return queue.current;
+    pending.current = null;
+    queue.current = queue.current.then(async () => {
+      try {
+        const saved = await updateNote(job.id, { title: job.title, content: job.content });
+        setNotes((items) => [toListItem(saved), ...items.filter((item) => item.id !== saved.id)]);
+        setSaveState(pending.current ? "saving" : "saved");
+      } catch {
+        // 失败时把改动放回待保存，下次编辑或切换时会重试
+        pending.current = { ...job, ...pending.current };
+        setSaveState("error");
+      }
+    });
+    return queue.current;
+  }, []);
+
+  // 离开页面时把未保存的改动发出去
+  useEffect(() => () => void flush(), [flush]);
+
+  // 搜索词停顿 250ms 后再请求；首次进入时也走这里加载列表
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      listNotes(query)
+        .then((items) => {
+          setNotes(items);
+          setError(null);
+        })
+        .catch((reason: Error) => setError(reason.message));
+    }, query ? 250 : 0);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  const edit = (patch: { title?: string; content?: string }) => {
+    if (!current) return;
+    setCurrent({ ...current, ...patch });
+    // 标题被清空时先只改界面，不提交空标题（失焦时会补回默认标题）
+    const { title, ...rest } = patch;
+    pending.current = { ...pending.current, id: current.id, ...rest, ...(title?.trim() ? { title } : {}) };
+    setSaveState("saving");
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => void flush(), AUTOSAVE_DELAY_MS);
+  };
+
+  const selectNote = async (id: number) => {
+    await flush();
+    try {
+      setCurrent(await getNote(id));
+      setAiDraft(null);
+      setSaveState("saved");
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
+  const newNote = async () => {
+    await flush();
+    try {
+      const note = await createNote();
+      setNotes((items) => [toListItem(note), ...items]);
+      setCurrent(note);
+      setIsPreview(false);
+      setAiDraft(null);
+      setSaveState("saved");
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
+  const removeNote = async () => {
+    if (!current || !window.confirm(`确定删除笔记“${current.title}”吗？删除后无法恢复。`)) return;
+    window.clearTimeout(timer.current);
+    pending.current = null;
+    try {
+      await deleteNote(current.id);
+      setNotes((items) => items.filter((item) => item.id !== current.id));
+      setCurrent(null);
+      setSaveState("saved");
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
   };
   const createAiDraft = () =>
+    current &&
     setAiDraft(
-      `# ${selectedNote.title}\n\n## 核心摘要\n\n${selectedNote.content
+      `# ${current.title}\n\n## 核心摘要\n\n${current.content
         .replace(/^#.*\n?/, "")
         .split("\n")
         .filter(Boolean)
@@ -71,7 +144,7 @@ export function NotesPage() {
           <p className="eyebrow">知识沉淀</p>
           <h2>我的笔记</h2>
         </div>
-        <button className="knowledge-create" type="button" onClick={newNote}>
+        <button className="knowledge-create" type="button" onClick={() => void newNote()}>
           <FilePlus2 size={17} /> 新建笔记
         </button>
       </div>
@@ -87,66 +160,57 @@ export function NotesPage() {
           </div>
           <div className="notes-filter-row">
             <span>
-              全部笔记 <b>{notes.length}</b>
+              {query ? "搜索结果" : "全部笔记"} <b>{notes.length}</b>
             </span>
             <button type="button">
               <Tag size={14} /> 标签
             </button>
           </div>
           <div className="notes-list">
-            {visibleNotes.map((note) => (
+            {notes.map((note) => (
               <button
                 type="button"
                 key={note.id}
-                onClick={() => {
-                  setSelectedId(note.id);
-                  setAiDraft(null);
-                }}
-                className={`note-list-item${note.id === selectedNote.id ? " selected" : ""}`}
+                onClick={() => void selectNote(note.id)}
+                className={`note-list-item${note.id === current?.id ? " selected" : ""}`}
               >
                 <strong>{note.title}</strong>
                 <p>
-                  {note.content
+                  {note.preview
                     .replace(/^#.*\n?/, "")
                     .replace(/[#*>-]/g, "")
                     .trim()
                     .slice(0, 52)}
                 </p>
                 <small>
-                  <span>{note.category}</span> · {note.updated}
+                  <span>{note.category}</span> · {formatTime(note.updatedAt)}
                 </small>
               </button>
             ))}
           </div>
-          {visibleNotes.length === 0 && (
-            <div className="notes-no-result">没有找到匹配的笔记</div>
+          {notes.length === 0 && !error && (
+            <div className="notes-no-result">{query ? "没有找到匹配的笔记" : "还没有笔记，点击右上角新建"}</div>
           )}
+          {error && <div className="notes-no-result">{error}</div>}
         </aside>
 
         <section className="note-editor-section">
+          {!current ? (
+            <div className="notes-no-result">选择左侧的笔记，或新建一篇</div>
+          ) : (
+            <>
           <header className="note-editor-header">
             <div>
               <input
                 className="note-title-input"
-                value={selectedNote.title}
+                value={current.title}
                 aria-label="笔记标题"
-                onChange={(event) =>
-                  setNotes((items) =>
-                    items.map((note) =>
-                      note.id === selectedNote.id
-                        ? {
-                            ...note,
-                            title: event.target.value,
-                            updated: "刚刚",
-                          }
-                        : note,
-                    ),
-                  )
-                }
+                onChange={(event) => edit({ title: event.target.value })}
+                onBlur={() => !current.title.trim() && edit({ title: "未命名笔记" })}
               />
               <p>
-                <span>{selectedNote.category}</span> · 已保存 ·{" "}
-                {selectedNote.updated}
+                <span>{current.category}</span> ·{" "}
+                {saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败，将自动重试" : `已保存 · ${formatTime(notes.find((item) => item.id === current.id)?.updatedAt ?? current.updatedAt)}`}
               </p>
             </div>
             <div className="editor-actions">
@@ -171,8 +235,8 @@ export function NotesPage() {
               >
                 <WandSparkles size={15} /> AI 辅助
               </button>
-              <button type="button" aria-label="更多笔记操作">
-                <MoreHorizontal size={18} />
+              <button type="button" aria-label="删除笔记" title="删除笔记" onClick={() => void removeNote()}>
+                <Trash2 size={16} />
               </button>
             </div>
           </header>
@@ -193,15 +257,18 @@ export function NotesPage() {
           </div>
           {isPreview ? (
             <article className="markdown-preview">
-              <MarkdownPreview content={selectedNote.content} />
+              <MarkdownPreview content={current.content} />
             </article>
           ) : (
             <textarea
               className="note-editor"
-              value={selectedNote.content}
-              onChange={(event) => updateNote(event.target.value)}
+              value={current.content}
+              placeholder="开始记录你的想法…"
+              onChange={(event) => edit({ content: event.target.value })}
               spellCheck
             />
+          )}
+            </>
           )}
         </section>
 
@@ -241,7 +308,7 @@ export function NotesPage() {
                   type="button"
                   className="accept-draft"
                   onClick={() => {
-                    updateNote(aiDraft);
+                    edit({ content: aiDraft });
                     setAiDraft(null);
                   }}
                 >

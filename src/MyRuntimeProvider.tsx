@@ -28,6 +28,7 @@ const chatAdapter: ChatModelAdapter = {
 
     let text = "";
     let sources: ChatSource[] = [];
+    let followups: string[] = [];
     for await (const event of streamChat(history, knowledgeBaseIds, conversationId, abortSignal)) {
       if (event.type === "conversation") {
         if (isCurrentThread()) setConversationId(event.id);
@@ -36,7 +37,10 @@ const chatAdapter: ChatModelAdapter = {
         if (isCurrentThread()) setSources(event.sources);
       } else if (event.type === "delta") {
         text += event.text;
-        yield { content: [{ type: "text", text }], metadata: { custom: { sources } } };
+        yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+      } else if (event.type === "followups") {
+        followups = event.items;
+        yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
       } else if (event.type === "done") {
         // 刷新列表，让新对话出现、标题和排序更新
         useChatStore.getState().loadConversations().catch(console.error);

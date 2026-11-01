@@ -82,6 +82,40 @@ const streamAnswer = async (
   return usage;
 };
 
+// 根据问答生成追问建议：非流式短调用，失败时返回空数组，不影响主回答
+const generateFollowups = async (question: string, answer: string, signal: AbortSignal): Promise<string[]> => {
+  try {
+    const response = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.deepseek.apiKey}` },
+      body: JSON.stringify({
+        model: config.deepseek.model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "根据用户的提问和助手的回答，给出 3 个用户可能接着问的简短问题。每行一个，不要编号、引号或多余说明，每个不超过 30 字，使用与提问相同的语言。",
+          },
+          { role: "user", content: `提问：${question.slice(0, 500)}\n\n回答：${answer.slice(0, 1500)}` },
+        ],
+        thinking: { type: "disabled" },
+        max_tokens: 150,
+      }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    });
+    if (!response.ok) return [];
+    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[] };
+    return (data.choices?.[0]?.message?.content ?? "")
+      .split("\n")
+      .map((line) => line.replace(/^\s*(?:[-*\d.、)]+\s*)/, "").trim())
+      .filter((line) => line.length > 0 && line.length <= 60)
+      .slice(0, 3);
+  } catch (error) {
+    if (!signal.aborted) console.error("追问建议生成失败", error);
+    return [];
+  }
+};
+
 const writeEvent = (res: Response, event: object) => res.write(`data: ${JSON.stringify(event)}\n\n`);
 
 export const chatRouter = Router();
@@ -125,6 +159,10 @@ chatRouter.post("/", async (req, res) => {
   let hits = 0;
   let topScore: number | undefined;
   let usage: Usage | undefined;
+  // 分段耗时（毫秒），写入日志便于定位慢在检索还是生成
+  let retrievalMs: number | undefined;
+  let firstTokenMs: number | undefined;
+  let followupMs: number | undefined;
   try {
     // 先落库：保存用户的提问，并让库里的历史与界面一致（含重新生成、编辑后重发的情况）
     const activeConversationId =
@@ -133,7 +171,9 @@ chatRouter.post("/", async (req, res) => {
     await touchConversation(activeConversationId, knowledgeBaseIds);
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
+    const retrievalStartedAt = Date.now();
     const chunks = await retrieveChunks(question, { knowledgeBaseIds });
+    retrievalMs = Date.now() - retrievalStartedAt;
     hits = chunks.length;
     topScore = chunks[0]?.score;
     const sources = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
@@ -141,6 +181,7 @@ chatRouter.post("/", async (req, res) => {
 
     let answer = "";
     const onDelta = (text: string) => {
+      firstTokenMs ??= Date.now() - startedAt;
       answer += text;
       writeEvent(res, { type: "delta", text });
     };
@@ -151,6 +192,13 @@ chatRouter.post("/", async (req, res) => {
     }
     // 回答完整结束后才保存；中途停止的不入库，下次发送时界面历史会带上它
     if (answer) await saveAssistantMessage(activeConversationId, answer, sources);
+    // 有资料可答时才生成追问建议；建议不入库，仅随本次回答展示
+    if (chunks.length > 0 && answer && !controller.signal.aborted) {
+      const followupStartedAt = Date.now();
+      const followups = await generateFollowups(question, answer, controller.signal);
+      followupMs = Date.now() - followupStartedAt;
+      if (followups.length > 0) writeEvent(res, { type: "followups", items: followups });
+    }
     writeEvent(res, { type: "done", usage });
   } catch (error) {
     if (!controller.signal.aborted) {
@@ -170,6 +218,9 @@ chatRouter.post("/", async (req, res) => {
         model: config.deepseek.model,
         usage: usage ?? null,
         aborted: controller.signal.aborted,
+        retrievalMs: retrievalMs ?? null,
+        firstTokenMs: firstTokenMs ?? null,
+        followupMs: followupMs ?? null,
         ms: Date.now() - startedAt,
       }),
     );

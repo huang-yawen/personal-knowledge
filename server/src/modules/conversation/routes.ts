@@ -107,6 +107,62 @@ conversationRouter.patch("/:id", async (req, res) => {
   res.json(await fetchConversation(id));
 });
 
+// 生成对话总结：取最近的消息交给模型概括，结果不入库
+conversationRouter.post("/:id/summary", async (req, res) => {
+  const id = parseId(req.params.id);
+  const conversation = id ? await fetchConversation(id) : undefined;
+  if (!id || !conversation) {
+    res.status(404).json({ error: "对话不存在" });
+    return;
+  }
+  const [messages] = await pool.query<RowDataPacket[]>(
+    "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
+    [id, config.chat.maxHistoryMessages],
+  );
+  if (messages.length === 0) {
+    res.status(400).json({ error: "对话里还没有内容" });
+    return;
+  }
+  const transcript = messages
+    .reverse()
+    .map((m) => `${m.role === "user" ? "用户" : "助手"}：${String(m.content).slice(0, 1500)}`)
+    .join("\n\n");
+  try {
+    const response = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.deepseek.apiKey}` },
+      body: JSON.stringify({
+        model: config.deepseek.model,
+        messages: [
+          {
+            role: "system",
+            content: "请用不超过 200 字总结下面这段对话：先写讨论的主题，再用要点列出结论。使用与对话相同的语言，不要编造对话中没有的内容。",
+          },
+          { role: "user", content: transcript },
+        ],
+        thinking: { type: "disabled" },
+        max_tokens: 600,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) {
+      console.error("总结请求失败", response.status, (await response.text()).slice(0, 300));
+      res.status(502).json({ error: `模型服务请求失败（HTTP ${response.status}）` });
+      return;
+    }
+    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[] };
+    const summary = data.choices?.[0]?.message?.content?.trim();
+    if (!summary) {
+      res.status(502).json({ error: "模型没有返回总结内容" });
+      return;
+    }
+    res.json({ summary });
+  } catch (error) {
+    console.error("总结生成失败", error);
+    res.status(502).json({ error: "总结生成失败，请稍后重试" });
+  }
+});
+
 conversationRouter.delete("/:id", async (req, res) => {
   const id = parseId(req.params.id);
   const [result] = id

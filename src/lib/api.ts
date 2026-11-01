@@ -64,6 +64,7 @@ export type ChatEvent =
   | { type: "conversation"; id: number }
   | { type: "sources"; sources: ChatSource[] }
   | { type: "delta"; text: string }
+  | { type: "followups"; items: string[] }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -124,6 +125,9 @@ export const updateConversation = (id: number, patch: { title?: string; isFavori
 
 export const getConversation = (id: number) => request<ConversationDetailDto>(`/conversations/${id}`);
 
+export const summarizeConversation = (id: number) =>
+  request<{ summary: string }>(`/conversations/${id}/summary`, { method: "POST" });
+
 export const deleteConversation = (id: number) => request<void>(`/conversations/${id}`, { method: "DELETE" });
 
 export type DocumentChunkDto = { id: number; chunkIndex: number; content: string; page: number | null };
@@ -152,3 +156,27 @@ export const retryDocument = (id: number) => request<DocumentDto>(`/documents/${
 
 export const renameDocument = (id: number, name: string) =>
   request<DocumentDto>(`/documents/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+
+export type NoteListItemDto = {
+  id: number;
+  title: string;
+  preview: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NoteDto = Omit<NoteListItemDto, "preview"> & { content: string };
+
+export const listNotes = (query = "") =>
+  request<NoteListItemDto[]>(`/notes?${new URLSearchParams(query ? { q: query } : {})}`);
+
+export const getNote = (id: number) => request<NoteDto>(`/notes/${id}`);
+
+export const createNote = (input: { title?: string; content?: string } = {}) =>
+  request<NoteDto>("/notes", { method: "POST", body: JSON.stringify(input) });
+
+export const updateNote = (id: number, patch: { title?: string; content?: string }) =>
+  request<NoteDto>(`/notes/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export const deleteNote = (id: number) => request<void>(`/notes/${id}`, { method: "DELETE" });

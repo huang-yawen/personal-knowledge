@@ -12,6 +12,7 @@ import { conversationRouter } from "./modules/conversation/routes";
 import { ragRouter } from "./modules/rag/routes";
 import { activityRouter } from "./modules/activity/routes";
 import { knowledgeBaseRouter } from "./modules/knowledge-base/routes";
+import { noteRouter } from "./modules/note/routes";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -32,6 +33,7 @@ app.use("/api", ragRouter);
 app.use("/api", activityRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/conversations", conversationRouter);
+app.use("/api/notes", noteRouter);
 
 // 兜底错误处理：未预期的异常统一返回 JSON，细节只写日志
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

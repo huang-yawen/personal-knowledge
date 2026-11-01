@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Archive, MessageSquarePlus, MoreHorizontal, Pencil, Search, Star, Trash2 } from "lucide-react";
-import type { ConversationDto } from "@/lib/api";
+import { Archive, FileText, MessageSquarePlus, MoreHorizontal, Pencil, Search, Star, Trash2 } from "lucide-react";
+import { summarizeConversation, type ConversationDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 
 // 按更新日期把对话分成 今天 / 昨天 / 更早
@@ -25,6 +25,8 @@ export function ConversationList({ onPick }: { onPick: () => void }) {
   } = useChatStore();
   const [search, setSearch] = useState("");
   const [menuId, setMenuId] = useState<number | null>(null);
+  // 会话总结弹窗：text 为空表示生成中
+  const [summary, setSummary] = useState<{ title: string; text?: string; error?: string } | null>(null);
 
   useEffect(() => {
     loadConversations().catch(console.error);
@@ -55,6 +57,13 @@ export function ConversationList({ onPick }: { onPick: () => void }) {
   const rename = (item: ConversationDto) => {
     const title = window.prompt("重命名对话", item.title)?.trim();
     if (title && title !== item.title) run(patchConversation(item.id, { title }));
+  };
+
+  const summarize = (item: ConversationDto) => {
+    setSummary({ title: item.title });
+    summarizeConversation(item.id)
+      .then((result) => setSummary({ title: item.title, text: result.summary }))
+      .catch((reason: Error) => setSummary({ title: item.title, error: reason.message }));
   };
 
   const act = (action: () => void) => {
@@ -100,6 +109,7 @@ export function ConversationList({ onPick }: { onPick: () => void }) {
                   <button className="menu-backdrop" type="button" aria-label="关闭菜单" onClick={() => setMenuId(null)} />
                   <div className="conversation-menu" role="menu">
                     <button type="button" role="menuitem" onClick={() => act(() => rename(item))}><Pencil size={14} /> 重命名</button>
+                    <button type="button" role="menuitem" onClick={() => act(() => summarize(item))}><FileText size={14} /> 生成总结</button>
                     <button type="button" role="menuitem" onClick={() => act(() => run(patchConversation(item.id, { isFavorite: !item.isFavorite })))}>
                       <Star size={14} /> {item.isFavorite ? "取消收藏" : "收藏"}
                     </button>
@@ -128,6 +138,20 @@ export function ConversationList({ onPick }: { onPick: () => void }) {
       <button className="conversation-archive-toggle" type="button" onClick={() => setConversationFilter(search, !showArchived).catch(console.error)}>
         <Archive size={14} /> {showArchived ? "返回对话" : "已归档的对话"}
       </button>
+      {summary && (
+        <div className="summary-overlay" role="dialog" aria-label="对话总结" onClick={() => setSummary(null)}>
+          <div className="summary-dialog" onClick={(event) => event.stopPropagation()}>
+            <h3>{summary.title}</h3>
+            <p className={summary.error ? "summary-error" : undefined}>{summary.error ?? summary.text ?? "正在生成总结…"}</p>
+            <div className="summary-actions">
+              {summary.text && (
+                <button type="button" onClick={() => navigator.clipboard.writeText(summary.text ?? "").catch(console.error)}>复制</button>
+              )}
+              <button type="button" onClick={() => setSummary(null)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
