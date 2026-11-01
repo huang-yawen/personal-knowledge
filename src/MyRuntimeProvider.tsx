@@ -6,7 +6,7 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { streamChat } from "@/lib/api";
+import { streamChat, type ChatSource } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 
 // 调用后端 /api/chat：先收到对话 id 和引用来源，再逐段收到回答文字
@@ -27,14 +27,16 @@ const chatAdapter: ChatModelAdapter = {
     });
 
     let text = "";
+    let sources: ChatSource[] = [];
     for await (const event of streamChat(history, knowledgeBaseId, conversationId, abortSignal)) {
       if (event.type === "conversation") {
         if (isCurrentThread()) setConversationId(event.id);
       } else if (event.type === "sources") {
+        sources = event.sources;
         if (isCurrentThread()) setSources(event.sources);
       } else if (event.type === "delta") {
         text += event.text;
-        yield { content: [{ type: "text", text }] };
+        yield { content: [{ type: "text", text }], metadata: { custom: { sources } } };
       } else if (event.type === "done") {
         // 刷新列表，让新对话出现、标题和排序更新
         useChatStore.getState().loadConversations().catch(console.error);

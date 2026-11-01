@@ -1,0 +1,69 @@
+/* ChatGPT 风格主题层：叠加在 App.css / shell.css 之上，只覆盖令牌和视觉，保留蓝色强调 */
+:root {
+  --app-bg: #fff; --surface: #fff; --surface-soft: #f4f4f4; --sidebar: #f9f9f9;
+  --text: #0d0d0d; --muted: #6b6b6b; --line: rgba(0, 0, 0, .1);
+  --hover: rgba(0, 0, 0, .05); --active: rgba(0, 0, 0, .08);
+  --shadow: 0 2px 12px rgba(0, 0, 0, .06);
+}
+.dark {
+  --app-bg: #212121; --surface: #212121; --surface-soft: #2f2f2f; --sidebar: #171717;
+  --text: #ececec; --muted: #9b9b9b; --line: rgba(255, 255, 255, .1);
+  --hover: rgba(255, 255, 255, .07); --active: rgba(255, 255, 255, .12);
+  --shadow: 0 2px 12px rgba(0, 0, 0, .35);
+}
+
+/* 侧边栏 */
+.sidebar { padding: 12px 8px 8px; }
+.sidebar-header { height: 44px; padding: 0 8px; }
+.brand { font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.brand-mark { width: 26px; height: 26px; border-radius: 50%; }
+.nav-list { margin-top: 8px; gap: 2px; }
+.nav-item { height: 36px; padding: 0 10px; gap: 10px; border-radius: 10px; font-size: 14px; color: var(--text); }
+.nav-item:hover { background: var(--hover); color: var(--text); }
+.nav-item.active { background: var(--active); color: var(--text); font-weight: 500; }
+.sidebar-bottom { border-top: 0; padding-top: 8px; gap: 2px; }
+.profile-button { padding: 8px 10px; border-radius: 10px; }
+.profile-button:hover { background: var(--hover); }
+.avatar { background: var(--blue); }
+
+/* 侧边栏里的对话历史 */
+.sidebar-conversations { flex: 1; min-height: 0; margin-top: 10px; overflow-y: auto; scrollbar-width: thin; }
+.sidebar-collapsed .sidebar-conversations { display: none; }
+.conversation-new { width: 100%; height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 10px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font-size: 14px; cursor: pointer; }
+.conversation-new:hover { background: var(--hover); }
+.conversation-group { margin-bottom: 14px; }
+.conversation-group > p { padding: 10px 10px 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.conversation-item { padding: 8px 10px; border-radius: 10px; color: var(--text); font-size: 14px; }
+.conversation-item > svg { display: none; }
+.conversation-item:hover { background: var(--hover); }
+.conversation-item.is-selected { background: var(--active); box-shadow: none; font-weight: 400; }
+.conversation-empty { padding: 8px 10px; font-size: 13px; }
+
+/* 对话页：居中单栏，顶部只留知识库选择 */
+.chat-page { background: var(--surface); }
+.chat-toolbar { min-height: 56px; padding: 0 16px; border-bottom: 0; background: transparent; }
+.chat-toolbar > p { display: none; }
+.library-selector { height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; font-size: 16px; font-weight: 600; }
+.library-selector:hover { background: var(--hover); }
+.chat-workspace { grid-template-columns: minmax(0, 1fr); }
+.chat-thread-shell .aui-thread-root { --thread-max-width: 48rem !important; --composer-radius: 28px !important; }
+.chat-thread-shell .aui-composer-root { max-width: 48rem; }
+.chat-thread-shell .aui-composer-root [data-slot="aui_composer-shell"] { padding: 10px 12px; border: 1px solid transparent; background: var(--surface-soft); box-shadow: none; }
+.chat-thread-shell .aui-composer-root [data-slot="aui_composer-shell"]:focus-within { border-color: var(--line); }
+.chat-thread-shell .aui-composer-send, .chat-thread-shell .aui-composer-cancel, .chat-thread-shell .aui-composer-resume { width: 32px; height: 32px; background: var(--text); color: var(--surface); }
+.chat-thread-shell .aui-composer-send:hover, .chat-thread-shell .aui-composer-cancel:hover { opacity: .8; }
+.chat-thread-shell .aui-user-message-root { background: transparent; }
+.chat-thread-shell .aui-user-message-content { padding: 10px 18px; border-radius: 22px; background: var(--surface-soft); color: var(--text); }
+.chat-thread-shell [data-slot="aui_assistant-message-content"] { font-size: 16px; line-height: 1.75; }
+.chat-welcome { max-width: none; padding: 0 0 18px; }
+.chat-welcome-mark, .prompt-grid { display: none; }
+.chat-welcome h2 { font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
+.chat-welcome > p { font-size: 15px; }
+
+/* 回答下方的来源标签 */
+.message-sources { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.message-sources > small { margin-right: 2px; color: var(--muted); font-size: 12px; }
+.source-chip { max-width: 240px; height: 28px; padding: 0 11px 0 5px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.source-chip:hover { background: var(--hover); }
+.source-chip b { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 11px; font-weight: 600; }
+.source-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

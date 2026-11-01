@@ -46,7 +46,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversationId: id,
       knowledgeBaseId: conversation.knowledgeBaseId,
       sources: lastAnswer?.citations ?? [],
-      initialMessages: conversation.messages.map((message) => ({ id: String(message.id), role: message.role, content: message.content })),
+      initialMessages: conversation.messages.map((message) => ({
+        id: String(message.id),
+        role: message.role,
+        content: message.content,
+        metadata: message.citations ? { custom: { sources: message.citations } } : undefined,
+      })),
       threadKey: state.threadKey + 1,
     }));
   },

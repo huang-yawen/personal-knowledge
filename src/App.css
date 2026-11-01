@@ -55,5 +55,4 @@
 .reader-chunk { margin:0 0 6px; padding:8px 10px; border-radius:8px; font-size:14px; line-height:1.75; white-space:pre-wrap; }
 .reader-chunk.is-target { background:var(--blue-soft); box-shadow:inset 3px 0 0 var(--blue); }
 .reader-empty { color:var(--muted); font-size:13px; }
-.citation-open { margin:0 10px 10px; cursor:pointer; padding:0 9px; height:26px; border:1px solid var(--line); border-radius:7px; background:transparent; color:var(--blue); font-size:11px; }
 .document-copy.is-clickable { cursor:pointer; }

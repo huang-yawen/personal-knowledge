@@ -2,12 +2,14 @@ import { useEffect, useState, type ComponentType } from "react";
 import { ChevronLeft, ChevronRight, FileText, Grid2X2, LibraryBig, Menu, MessageSquareText, Moon, MoreHorizontal, Settings2, Sparkles, Sun, UserRound, X } from "lucide-react";
 import "./App.css";
 import "./shell.css";
+import "./theme.css";
 import { Dashboard } from "@/pages/Dashboard";
 import { ChatPage } from "@/pages/ChatPage";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 import { NotesPage } from "@/pages/NotesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { DocumentReader } from "@/components/DocumentReader";
+import { ConversationList } from "@/components/ConversationList";
 
 type NavItem = {
   label: string;
@@ -77,6 +79,8 @@ function App() {
             </button>
           ))}
         </nav>
+
+        {activeNav === "AI 对话" && <ConversationList onPick={() => setIsSidebarOpen(false)} />}
 
         <div className="sidebar-bottom">
           <button className="nav-item" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => changeTheme(!isDark)}>
