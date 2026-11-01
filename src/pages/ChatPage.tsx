@@ -12,6 +12,7 @@ import {
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
+import { useReaderStore } from "@/lib/reader-store";
 import { MyRuntimeProvider } from "@/MyRuntimeProvider";
 
 // 按更新日期把对话分成 今天 / 昨天 / 更早
@@ -36,6 +37,7 @@ export function ChatPage() {
     newConversation,
     removeConversation,
   } = useChatStore();
+  const openReader = useReaderStore((state) => state.open);
 
   useEffect(() => {
     listKnowledgeBases().then(setKnowledgeBases).catch(console.error);
@@ -132,6 +134,9 @@ export function ChatPage() {
                     </small>
                   </summary>
                   <p>{source.content}</p>
+                  <button className="citation-open" type="button" onClick={() => openReader(source.documentId, source.chunkId)}>
+                    查看原文
+                  </button>
                 </details>
               ))}
             </div>

@@ -44,3 +44,16 @@
 .conversation-row:hover .conversation-delete,.conversation-delete:focus-visible { opacity:1; }
 .conversation-delete:hover { color:var(--accent-red); background:var(--accent-red-tint); }
 .conversation-empty { margin:0; padding:0 7px; color:var(--muted); font-size:11px; line-height:1.55; }
+.reader-layer { position:fixed; inset:0; z-index:60; display:flex; justify-content:flex-end; }
+.reader-panel { position:relative; width:min(640px,100%); height:100%; display:flex; flex-direction:column; background:var(--surface); border-left:1px solid var(--line); box-shadow:-12px 0 40px rgba(0,0,0,.12); }
+.reader-head { min-height:52px; padding:0 16px 0 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); font-size:14px; }
+.reader-head strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.reader-head button { width:30px; height:30px; display:grid; place-items:center; border:0; border-radius:8px; color:var(--muted); background:transparent; cursor:pointer; }
+.reader-head button:hover { background:var(--surface-soft); }
+.reader-body { flex:1; overflow:auto; padding:8px 20px 40px; }
+.reader-page { margin:22px 0 8px; color:var(--muted); font-size:11px; font-weight:650; }
+.reader-chunk { margin:0 0 6px; padding:8px 10px; border-radius:8px; font-size:14px; line-height:1.75; white-space:pre-wrap; }
+.reader-chunk.is-target { background:var(--blue-soft); box-shadow:inset 3px 0 0 var(--blue); }
+.reader-empty { color:var(--muted); font-size:13px; }
+.citation-open { margin:0 10px 10px; cursor:pointer; padding:0 9px; height:26px; border:1px solid var(--line); border-radius:7px; background:transparent; color:var(--blue); font-size:11px; }
+.document-copy.is-clickable { cursor:pointer; }

@@ -189,3 +189,24 @@ documentRouter.delete("/documents/:id", async (req, res) => {
   await deleteVectors("document_id", id).catch((error: unknown) => console.error("删除向量失败", error));
   res.status(204).end();
 });
+
+// 阅读视图：返回文档信息和全部分块（按原文顺序），引用卡片靠 chunk id 定位到其中一段
+documentRouter.get("/documents/:id/chunks", async (req, res) => {
+  const id = parseId(req.params.id);
+  const [docs] = id
+    ? await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ? AND user_id = ?`, [
+        id,
+        config.devUserId,
+      ])
+    : [[]];
+  if (!id || docs.length === 0) {
+    res.status(404).json({ error: "文档不存在" });
+    return;
+  }
+  const [chunks] = await pool.query<RowDataPacket[]>(
+    `SELECT id, chunk_index AS chunkIndex, content, page_number AS page
+     FROM document_chunks WHERE document_id = ? AND user_id = ? ORDER BY chunk_index`,
+    [id, config.devUserId],
+  );
+  res.json({ document: docs[0], chunks });
+});

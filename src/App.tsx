@@ -7,6 +7,7 @@ import { ChatPage } from "@/pages/ChatPage";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 import { NotesPage } from "@/pages/NotesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
+import { DocumentReader } from "@/components/DocumentReader";
 
 type NavItem = {
   label: string;
@@ -105,6 +106,8 @@ function App() {
           </div>
         )}
       </main>
+
+      <DocumentReader />
 
       <button className="sidebar-toggle" type="button" aria-label="折叠侧边栏" onClick={() => setIsCollapsed((value) => !value)}>
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

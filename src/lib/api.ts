@@ -118,3 +118,8 @@ export const listConversations = () => request<ConversationDto[]>("/conversation
 export const getConversation = (id: number) => request<ConversationDetailDto>(`/conversations/${id}`);
 
 export const deleteConversation = (id: number) => request<void>(`/conversations/${id}`, { method: "DELETE" });
+
+export type DocumentChunkDto = { id: number; chunkIndex: number; content: string; page: number | null };
+
+export const getDocumentChunks = (id: number) =>
+  request<{ document: DocumentDto; chunks: DocumentChunkDto[] }>(`/documents/${id}/chunks`);

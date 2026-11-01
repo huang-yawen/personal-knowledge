@@ -9,6 +9,7 @@ import {
   type DocumentDto,
   type KnowledgeBaseDto,
 } from "@/lib/api";
+import { useReaderStore } from "@/lib/reader-store";
 import type { KnowledgeBase, KnowledgeDocument } from "@/types";
 
 const covers = ["blue", "purple", "orange", "green"] as const;
@@ -61,6 +62,7 @@ export function KnowledgePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const openReader = useReaderStore((state) => state.open);
   const selectedBase = knowledgeBases.find((item) => item.id === selectedId) ?? knowledgeBases[0];
 
   useEffect(() => {
@@ -161,7 +163,7 @@ export function KnowledgePage() {
         <section className="knowledge-detail-section">
           <header className="knowledge-detail-head"><div className="knowledge-detail-title"><span className={`knowledge-cover large ${selectedBase.cover}`}><LibraryBig size={23} /></span><div><h3>{selectedBase.name}</h3><p>{selectedBase.description}</p></div></div><button type="button" className="detail-more" aria-label="知识库更多选项"><MoreHorizontal size={19} /></button></header>
           <div className="document-toolbar"><div><strong>资料</strong><span>{selectedBase.documents} 个文档</span></div><label className="upload-button"><FileUp size={16} /> 上传资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>
-          {visibleDocuments.length > 0 ? <div className="document-list">{visibleDocuments.map(toDocument).map((document) => <article className="document-row" key={document.id}><span className={`file-type ${document.type.toLowerCase()}`}>{document.type}</span><div className="document-copy"><strong>{document.name}</strong><small>{document.status === "处理失败" && document.errorMessage ? document.errorMessage : `${document.size} · 更新于 ${document.updated}`}</small></div><DocumentStatus status={document.status} /><button type="button" className="document-more" aria-label={`删除 ${document.name}`} onClick={() => removeDocument(selectedBase, document)}><Trash2 size={17} /></button></article>)}</div> : <div className="documents-empty"><span><Upload size={21} /></span><h3>还没有资料</h3><p>上传 PDF、Markdown 或 TXT 文件，开始构建可检索的知识库。</p><label className="upload-button secondary"><FileUp size={16} /> 上传第一份资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>}
+          {visibleDocuments.length > 0 ? <div className="document-list">{visibleDocuments.map(toDocument).map((document) => <article className="document-row" key={document.id}><span className={`file-type ${document.type.toLowerCase()}`}>{document.type}</span><div className={`document-copy${document.status === "完成" ? " is-clickable" : ""}`} onClick={() => document.status === "完成" && openReader(document.id)}><strong>{document.name}</strong><small>{document.status === "处理失败" && document.errorMessage ? document.errorMessage : `${document.size} · 更新于 ${document.updated}`}</small></div><DocumentStatus status={document.status} /><button type="button" className="document-more" aria-label={`删除 ${document.name}`} onClick={() => removeDocument(selectedBase, document)}><Trash2 size={17} /></button></article>)}</div> : <div className="documents-empty"><span><Upload size={21} /></span><h3>还没有资料</h3><p>上传 PDF、Markdown 或 TXT 文件，开始构建可检索的知识库。</p><label className="upload-button secondary"><FileUp size={16} /> 上传第一份资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>}
           <div className="processing-note"><Sparkles size={15} /><span>文件上传后会自动解析、分段并建立检索索引。处理完成后即可用于 AI 对话。</span></div>
         </section>
         ) : (
