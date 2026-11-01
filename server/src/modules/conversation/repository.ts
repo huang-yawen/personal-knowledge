@@ -1,6 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
+import { recordActivity } from "../activity/repository";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -24,6 +25,7 @@ export const createConversation = async (title: string, knowledgeBaseId: number 
     "INSERT INTO conversations (user_id, title, knowledge_base_id) VALUES (?, ?, ?)",
     [config.devUserId, title, knowledgeBaseId ?? null],
   );
+  await recordActivity(config.devUserId, "conversation_started", title, result.insertId);
   return result.insertId;
 };
 

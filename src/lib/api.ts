@@ -123,3 +123,22 @@ export type DocumentChunkDto = { id: number; chunkIndex: number; content: string
 
 export const getDocumentChunks = (id: number) =>
   request<{ document: DocumentDto; chunks: DocumentChunkDto[] }>(`/documents/${id}/chunks`);
+
+export type ActivityType = "kb_created" | "doc_uploaded" | "doc_ready" | "doc_failed" | "conversation_started";
+
+export type ActivityDto = { id: number; type: ActivityType; title: string; refId: number | null; createdAt: string };
+
+export type OverviewDto = {
+  knowledgeBases: number;
+  documents: number;
+  conversations: number;
+  // 需要处理：失败或仍在处理中的文档
+  attention: { id: number; name: string; knowledgeBaseId: number; status: DocumentStatusDto; errorMessage: string | null }[];
+};
+
+export const getOverview = () => request<OverviewDto>("/overview");
+
+export const listActivities = (before?: number) =>
+  request<ActivityDto[]>(`/activities?limit=30${before ? `&before=${before}` : ""}`);
+
+export const retryDocument = (id: number) => request<DocumentDto>(`/documents/${id}/retry`, { method: "POST" });

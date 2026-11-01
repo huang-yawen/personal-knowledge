@@ -3,6 +3,7 @@ import path from "node:path";
 import type { RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
+import { recordActivity } from "../activity/repository";
 import { embedTexts } from "../rag/embedding";
 import { deleteVectors, upsertPoints } from "../rag/qdrant";
 import { chunkText } from "./chunk";
@@ -40,7 +41,7 @@ const embedChunks = async (id: number, userId: number, knowledgeBaseId: number) 
 // 解析 → 分块 → 写入 document_chunks → 向量化写入 Qdrant，全部成功后状态为 done
 const processDocument = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>(
-    "SELECT user_id, knowledge_base_id, stored_path, mime_type FROM documents WHERE id = ?",
+    "SELECT user_id, knowledge_base_id, stored_path, mime_type, original_name FROM documents WHERE id = ?",
     [id],
   );
   const doc = rows[0];
@@ -85,6 +86,7 @@ const processDocument = async (id: number) => {
       throw new Error(`向量化失败：${error instanceof Error ? error.message : String(error)}`);
     }
     await setStatus(id, "done");
+    await recordActivity(doc.user_id, "doc_ready", doc.original_name, id);
   } catch (error) {
     console.error(`文档 ${id} 处理失败`, error);
     const message = error instanceof Error ? error.message : String(error);
@@ -92,6 +94,7 @@ const processDocument = async (id: number) => {
       message.slice(0, 1000),
       id,
     ]);
+    await recordActivity(doc.user_id, "doc_failed", doc.original_name, id);
   }
 };
 

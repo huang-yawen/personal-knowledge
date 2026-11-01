@@ -67,3 +67,41 @@
 .source-chip:hover { background: var(--hover); }
 .source-chip b { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 11px; font-weight: 600; }
 .source-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 工作台：状态总览 + 轨迹 */
+.overview { max-width: 720px; margin: 0 auto; padding: 8vh 0 64px; }
+.overview-error { margin-top: 16px; text-align: center; }
+.overview-stats { margin-top: 28px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.overview-stat { padding: 16px 18px; display: grid; gap: 4px; border: 0; border-radius: 16px; background: var(--surface-soft); color: var(--text); text-align: left; cursor: pointer; }
+.overview-stat:hover { background: var(--active); }
+.overview-stat strong { font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
+.overview-stat span { color: var(--muted); font-size: 13px; }
+.overview-section { margin-top: 40px; }
+.overview-section h2 { padding: 0 12px 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.attention-row { padding: 10px 12px; display: flex; align-items: center; gap: 12px; border-radius: 10px; }
+.attention-row > svg { flex: none; color: var(--muted); }
+.attention-row > svg.is-failed { color: var(--status-failed); }
+.attention-row > div { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.attention-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+.attention-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.mini-button { height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.mini-button:hover { background: var(--hover); }
+.timeline-month { padding: 18px 12px 6px; display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 600; }
+.timeline-month small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.timeline-item { width: 100%; padding: 8px 12px; display: grid; grid-template-columns: 96px 72px minmax(0, 1fr); align-items: baseline; gap: 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 14px; text-align: left; cursor: pointer; }
+.timeline-item:hover { background: var(--hover); }
+.timeline-item time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.timeline-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-tag { color: var(--muted); font-size: 12px; font-style: normal; white-space: nowrap; }
+.timeline-tag.doc_failed { color: var(--status-failed); }
+.timeline-tag.doc_ready { color: var(--accent-green); }
+.timeline-empty { padding: 4px 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.timeline-more { margin: 12px auto 0; padding: 0 16px; height: 32px; display: block; border: 1px solid var(--line); border-radius: 16px; background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; }
+.timeline-more:hover { background: var(--hover); color: var(--text); }
+@media (max-width: 760px) {
+  .overview { padding-top: 6vh; }
+  .timeline-item { grid-template-columns: 1fr auto; grid-template-areas: "title title" "time tag"; gap: 2px 8px; }
+  .timeline-item span { grid-area: title; }
+  .timeline-item time { grid-area: time; }
+  .timeline-item .timeline-tag { grid-area: tag; justify-self: end; }
+}

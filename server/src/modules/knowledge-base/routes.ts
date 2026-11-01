@@ -4,6 +4,7 @@ import { Router } from "express";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
+import { recordActivity } from "../activity/repository";
 import { deleteVectors } from "../rag/qdrant";
 
 type KnowledgeBaseRow = RowDataPacket & {
@@ -85,6 +86,7 @@ knowledgeBaseRouter.post("/", async (req, res) => {
     [config.devUserId, fields.name, fields.description ?? ""],
   );
   const [created] = await fetchKnowledgeBases({ id: result.insertId });
+  await recordActivity(config.devUserId, "kb_created", created.name, result.insertId);
   res.status(201).json(created);
 });
 

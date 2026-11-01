@@ -7,6 +7,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
 import { parseId } from "../knowledge-base/routes";
+import { recordActivity } from "../activity/repository";
 import { deleteVectors } from "../rag/qdrant";
 import { enqueue } from "../worker/queue";
 
@@ -161,6 +162,7 @@ documentRouter.post("/knowledge-bases/:id/documents", async (req, res) => {
     const [created] = await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ?`, [
       result.insertId,
     ]);
+    await recordActivity(config.devUserId, "doc_uploaded", originalName, result.insertId);
     enqueue(result.insertId);
     res.status(201).json(created[0]);
   } catch (error) {
@@ -209,4 +211,22 @@ documentRouter.get("/documents/:id/chunks", async (req, res) => {
     [id, config.devUserId],
   );
   res.json({ document: docs[0], chunks });
+});
+
+// 失败重试：只允许处理失败的文档，重置状态后重新进入处理队列
+documentRouter.post("/documents/:id/retry", async (req, res) => {
+  const id = parseId(req.params.id);
+  const [result] = id
+    ? await pool.query<ResultSetHeader>(
+        "UPDATE documents SET status = 'pending', error_message = NULL WHERE id = ? AND user_id = ? AND status = 'failed'",
+        [id, config.devUserId],
+      )
+    : [undefined];
+  if (!id || !result || result.affectedRows === 0) {
+    res.status(404).json({ error: "文档不存在或不是失败状态" });
+    return;
+  }
+  enqueue(id);
+  const [rows] = await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ?`, [id]);
+  res.json(rows[0]);
 });

@@ -10,6 +10,7 @@ import { resumeQueue } from "./modules/worker/queue";
 import { chatRouter } from "./modules/chat/routes";
 import { conversationRouter } from "./modules/conversation/routes";
 import { ragRouter } from "./modules/rag/routes";
+import { activityRouter } from "./modules/activity/routes";
 import { knowledgeBaseRouter } from "./modules/knowledge-base/routes";
 
 const app = express();
@@ -28,6 +29,7 @@ app.get("/api/health", async (_req, res) => {
 app.use("/api/knowledge-bases", knowledgeBaseRouter);
 app.use("/api", documentRouter);
 app.use("/api", ragRouter);
+app.use("/api", activityRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/conversations", conversationRouter);
 
