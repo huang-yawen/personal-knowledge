@@ -13,6 +13,12 @@ export type RetrievedChunk = {
   score: number;
 };
 
+// 检索失败时给用户看的提示：区分嵌入服务不可用和其他（向量库、数据库）不可用
+export const describeRetrievalError = (error: unknown) =>
+  error instanceof Error && error.message.startsWith("Embedding")
+    ? "嵌入服务请求失败，请检查网络后重试"
+    : "检索资料失败，请确认向量库（Qdrant）和数据库已启动后重试";
+
 // 请求里的可选 id（如知识库范围）：不传或 null 表示未指定；非法值返回 "invalid"
 export const parseOptionalId = (value: unknown): number | undefined | "invalid" => {
   if (value === undefined || value === null) return undefined;

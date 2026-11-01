@@ -11,6 +11,7 @@ import {
   type OverviewDto,
 } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
+import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
 
 type DashboardProps = { onNavigate: (page: string) => void };
@@ -24,6 +25,7 @@ const activityLabels: Record<ActivityType, string> = {
   doc_ready: "处理完成",
   doc_failed: "处理失败",
   conversation_started: "开始对话",
+  note_created: "新建笔记",
 };
 
 const greeting = () => {
@@ -94,6 +96,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const openActivity = (item: ActivityDto) => {
     if (item.type === "conversation_started" && item.refId) goConversation(item.refId);
     else if (item.type === "doc_ready" && item.refId) openReader(item.refId);
+    else if (item.type === "note_created" && item.refId) {
+      useNoteNavStore.getState().request(item.refId);
+      onNavigate("我的笔记");
+    }
     else onNavigate("我的知识库");
   };
 

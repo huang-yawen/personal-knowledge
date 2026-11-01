@@ -2,8 +2,10 @@ import { Router } from "express";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
+import { recordActivity } from "../activity/repository";
+import { addNoteToKnowledgeBase, getNoteKnowledgeBase, NoteKnowledgeError, removeNoteFromKnowledgeBase } from "./knowledge";
 import { parseId } from "../knowledge-base/routes";
-import { ownsKnowledgeBases, parseIdList, retrieveChunks } from "../rag/retrieve";
+import { describeRetrievalError, ownsKnowledgeBases, parseIdList, retrieveChunks } from "../rag/retrieve";
 
 const MAX_TITLE_CHARS = 100;
 const MAX_CONTENT_CHARS = 200_000;
@@ -61,7 +63,12 @@ const fetchNote = async (id: number) => {
      FROM note_sources s WHERE s.note_id = ? ORDER BY s.id`,
     [config.devUserId, config.devUserId, id],
   );
-  return { ...toDto(rows[0]), sources: sources.map((source) => ({ ...source, available: Boolean(source.available) })) };
+  const note = toDto(rows[0]);
+  return {
+    ...note,
+    sources: sources.map((source) => ({ ...source, available: Boolean(source.available) })),
+    knowledgeBase: await getNoteKnowledgeBase({ id, title: rows[0].title as string, content: rows[0].content as string }),
+  };
 };
 
 export const noteRouter = Router();
@@ -185,7 +192,14 @@ noteRouter.post("/generate", async (req, res) => {
     return;
   }
   try {
-    const chunks = await retrieveChunks(topic, { knowledgeBaseIds });
+    let chunks;
+    try {
+      chunks = await retrieveChunks(topic, { knowledgeBaseIds });
+    } catch (error) {
+      console.error("AI 生成笔记检索失败", error);
+      res.status(502).json({ error: describeRetrievalError(error) });
+      return;
+    }
     if (chunks.length === 0) {
       res.status(422).json({ error: "知识库里没有找到相关资料，请换个主题，或先上传并处理好文档" });
       return;
@@ -261,6 +275,17 @@ noteRouter.post("/", async (req, res) => {
     res.status(400).json({ error: `来源格式不正确（最多 ${MAX_SOURCES} 个）` });
     return;
   }
+  // 带来源的创建（保存回答、摘录、AI 生成）按“标题 + 正文完全相同”去重，已存在则直接返回，避免重复点击产生多篇
+  if (sources.length > 0) {
+    const [existing] = await pool.query<RowDataPacket[]>(
+      "SELECT id FROM notes WHERE user_id = ? AND title = ? AND content = ? LIMIT 1",
+      [config.devUserId, title, content],
+    );
+    if (existing[0]) {
+      res.json(await fetchNote(existing[0].id as number));
+      return;
+    }
+  }
   const conn = await pool.getConnection();
   let noteId: number;
   try {
@@ -283,6 +308,8 @@ noteRouter.post("/", async (req, res) => {
   } finally {
     conn.release();
   }
+  // 手动新建的空白笔记不记入轨迹；带内容或来源的（保存回答、摘录、AI 生成）才记
+  if (sources.length > 0 || content) await recordActivity(config.devUserId, "note_created", title, noteId);
   res.status(201).json(await fetchNote(noteId));
 });
 
@@ -360,8 +387,41 @@ noteRouter.patch("/:id", async (req, res) => {
   res.json(await fetchNote(id));
 });
 
+// 加入 / 更新到知识库（已在同一知识库则重新同步，在别的知识库则切换）
+noteRouter.put("/:id/knowledge-base", async (req, res) => {
+  const id = parseId(req.params.id);
+  const knowledgeBaseId = req.body?.knowledgeBaseId;
+  if (!id || typeof knowledgeBaseId !== "number" || !Number.isInteger(knowledgeBaseId) || knowledgeBaseId <= 0) {
+    res.status(400).json({ error: "笔记或知识库 id 不正确" });
+    return;
+  }
+  try {
+    await addNoteToKnowledgeBase(id, knowledgeBaseId);
+  } catch (error) {
+    if (error instanceof NoteKnowledgeError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+  res.json(await fetchNote(id));
+});
+
+// 移出知识库：删除对应文档和向量，笔记本身保留
+noteRouter.delete("/:id/knowledge-base", async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id || !(await fetchNote(id))) {
+    res.status(404).json({ error: "笔记不存在" });
+    return;
+  }
+  await removeNoteFromKnowledgeBase(id);
+  res.json(await fetchNote(id));
+});
+
 noteRouter.delete("/:id", async (req, res) => {
   const id = parseId(req.params.id);
+  // 先清理知识库里对应的文档、文件和向量，避免留下孤立数据
+  if (id) await removeNoteFromKnowledgeBase(id);
   const [result] = id
     ? await pool.query<ResultSetHeader>("DELETE FROM notes WHERE id = ? AND user_id = ?", [id, config.devUserId])
     : [undefined];

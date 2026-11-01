@@ -17,6 +17,8 @@ export type DocumentDto = {
   sizeBytes: number;
   status: DocumentStatusDto;
   errorMessage: string | null;
+  // 由笔记生成的文档，值为来源笔记 id
+  sourceNoteId: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -135,7 +137,7 @@ export type DocumentChunkDto = { id: number; chunkIndex: number; content: string
 export const getDocumentChunks = (id: number) =>
   request<{ document: DocumentDto; chunks: DocumentChunkDto[] }>(`/documents/${id}/chunks`);
 
-export type ActivityType = "kb_created" | "doc_uploaded" | "doc_ready" | "doc_failed" | "conversation_started";
+export type ActivityType = "kb_created" | "doc_uploaded" | "doc_ready" | "doc_failed" | "conversation_started" | "note_created";
 
 export type ActivityDto = { id: number; type: ActivityType; title: string; refId: number | null; createdAt: string };
 
@@ -172,7 +174,21 @@ export type NoteSourceInput = { type: "document" | "conversation"; refId: number
 // available 为 false 表示来源资源已被删除，只保留名称
 export type NoteSourceDto = Omit<NoteSourceInput, "chunkId"> & { id: number; chunkId: number | null; available: boolean };
 
-export type NoteDto = Omit<NoteListItemDto, "preview"> & { content: string; sources: NoteSourceDto[] };
+// 笔记所在的知识库及处理状态；outdated 表示笔记在同步之后又被修改过
+export type NoteKnowledgeBaseDto = {
+  documentId: number;
+  knowledgeBaseId: number;
+  knowledgeBaseName: string;
+  status: DocumentStatusDto;
+  errorMessage: string | null;
+  outdated: boolean;
+};
+
+export type NoteDto = Omit<NoteListItemDto, "preview"> & {
+  content: string;
+  sources: NoteSourceDto[];
+  knowledgeBase: NoteKnowledgeBaseDto | null;
+};
 
 export const listNotes = (query = "", tag = "") =>
   request<NoteListItemDto[]>(`/notes?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(tag ? { tag } : {}) })}`);
@@ -206,3 +222,9 @@ export const generateNote = (topic: string, knowledgeBaseIds: number[] = []) =>
     method: "POST",
     body: JSON.stringify({ topic, knowledgeBaseIds }),
   });
+
+// 加入知识库；已在同一知识库则重新同步，在别的知识库则切换
+export const addNoteToKnowledgeBase = (id: number, knowledgeBaseId: number) =>
+  request<NoteDto>(`/notes/${id}/knowledge-base`, { method: "PUT", body: JSON.stringify({ knowledgeBaseId }) });
+
+export const removeNoteFromKnowledgeBase = (id: number) => request<NoteDto>(`/notes/${id}/knowledge-base`, { method: "DELETE" });

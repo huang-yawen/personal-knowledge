@@ -8,7 +8,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { parseId } from "../knowledge-base/routes";
 import { recordActivity } from "../activity/repository";
-import { deleteVectors } from "../rag/qdrant";
+import { removeDocument } from "./remove";
 import { enqueue } from "../worker/queue";
 
 // 只信扩展名，MIME 由服务端按扩展名确定，不使用客户端传来的值
@@ -34,12 +34,13 @@ type DocumentRow = RowDataPacket & {
   sizeBytes: number;
   status: string;
   errorMessage: string | null;
+  sourceNoteId: number | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 const documentColumns = `id, knowledge_base_id AS knowledgeBaseId, original_name AS name, mime_type AS mimeType,
-  size_bytes AS sizeBytes, status, error_message AS errorMessage, created_at AS createdAt, updated_at AS updatedAt`;
+  size_bytes AS sizeBytes, status, error_message AS errorMessage, source_note_id AS sourceNoteId, created_at AS createdAt, updated_at AS updatedAt`;
 
 const knowledgeBaseExists = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM knowledge_bases WHERE id = ? AND user_id = ?", [
@@ -174,21 +175,10 @@ documentRouter.post("/knowledge-bases/:id/documents", async (req, res) => {
 
 documentRouter.delete("/documents/:id", async (req, res) => {
   const id = parseId(req.params.id);
-  const [rows] = id
-    ? await pool.query<RowDataPacket[]>("SELECT stored_path FROM documents WHERE id = ? AND user_id = ?", [
-        id,
-        config.devUserId,
-      ])
-    : [[]];
-  if (!id || rows.length === 0) {
+  if (!id || !(await removeDocument(id))) {
     res.status(404).json({ error: "文档不存在" });
     return;
   }
-  // 先删记录再删文件：即使删文件失败，也不会留下指向不存在文件的记录
-  await pool.query("DELETE FROM documents WHERE id = ? AND user_id = ?", [id, config.devUserId]);
-  await rm(path.join(config.uploadDir, rows[0].stored_path as string), { force: true });
-  // 向量清理失败不影响删除；检索时会以 MySQL 中的分块为准，残留向量不会被引用
-  await deleteVectors("document_id", id).catch((error: unknown) => console.error("删除向量失败", error));
   res.status(204).end();
 });
 
@@ -237,6 +227,17 @@ documentRouter.patch("/documents/:id", async (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (!name || name.length > 255) {
     res.status(400).json({ error: "名称不能为空，且不超过 255 个字符" });
+    return;
+  }
+  // 来自笔记的文档名称跟随笔记标题，在这里改会在下次同步时被覆盖
+  const [fromNote] = id
+    ? await pool.query<RowDataPacket[]>("SELECT id FROM documents WHERE id = ? AND user_id = ? AND source_note_id IS NOT NULL", [
+        id,
+        config.devUserId,
+      ])
+    : [[]];
+  if (fromNote.length > 0) {
+    res.status(409).json({ error: "来自笔记的文档请在笔记里修改标题" });
     return;
   }
   const [result] = id

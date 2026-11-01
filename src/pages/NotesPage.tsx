@@ -4,6 +4,7 @@ import {
   Check,
   Code2,
   FilePlus2,
+  LibraryBig,
   List,
   PencilLine,
   Search,
@@ -20,15 +21,19 @@ import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
 import {
+  addNoteToKnowledgeBase,
   createNote,
   deleteNote,
   getNote,
   runNoteAi,
+  listKnowledgeBases,
   listNotes,
   listNoteTags,
   updateNote,
   type NoteDto,
   type NoteListItemDto,
+  removeNoteFromKnowledgeBase,
+  type KnowledgeBaseDto,
   type NoteAiAction,
   type NotePatch,
   type NoteSourceDto,
@@ -76,6 +81,11 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
   const [tagFilter, setTagFilter] = useState("");
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  // 知识库：menu 为选择知识库的下拉，busy 为同步请求进行中
+  const [kbList, setKbList] = useState<KnowledgeBaseDto[]>([]);
+  const [isKbMenuOpen, setIsKbMenuOpen] = useState(false);
+  const [kbBusy, setKbBusy] = useState(false);
+  const [kbError, setKbError] = useState<string | null>(null);
   // 待保存的改动与保存队列：队列保证同一笔记的保存请求按顺序发出，不会被慢请求反超
   const pending = useRef<({ id: number } & NotePatch) | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -129,7 +139,13 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
 
   const edit = (patch: NotePatch) => {
     if (!current) return;
-    setCurrent({ ...current, ...patch });
+    // 已加入知识库的笔记，正文或标题一改动就标记为“有未同步的修改”
+    const changesText = patch.title !== undefined || patch.content !== undefined;
+    setCurrent({
+      ...current,
+      ...patch,
+      knowledgeBase: current.knowledgeBase && changesText ? { ...current.knowledgeBase, outdated: true } : current.knowledgeBase,
+    });
     // 标题、分类被清空时先只改界面，不提交空值（失焦时会补回默认值）
     const { title, category, ...rest } = patch;
     pending.current = {
@@ -159,10 +175,68 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
     useChatStore.getState().openConversation(source.refId).then(() => onNavigate("AI 对话")).catch((reason: Error) => setError(reason.message));
   };
 
+  const openKbMenu = () => {
+    setKbError(null);
+    setIsKbMenuOpen(true);
+    listKnowledgeBases().then(setKbList).catch((reason: Error) => setKbError(reason.message));
+  };
+
+  // 加入、更新或切换知识库：先把未保存的改动落库，服务端读取的是数据库里的内容
+  const syncToKnowledgeBase = async (knowledgeBaseId: number) => {
+    if (!current) return;
+    setIsKbMenuOpen(false);
+    setKbBusy(true);
+    setKbError(null);
+    try {
+      await flush();
+      const updated = await addNoteToKnowledgeBase(current.id, knowledgeBaseId);
+      setCurrent((open) => (open && open.id === updated.id ? { ...open, knowledgeBase: updated.knowledgeBase } : open));
+    } catch (reason) {
+      setKbError((reason as Error).message);
+    } finally {
+      setKbBusy(false);
+    }
+  };
+
+  const leaveKnowledgeBase = async () => {
+    if (!current?.knowledgeBase || !window.confirm(`确定将这篇笔记移出知识库“${current.knowledgeBase.knowledgeBaseName}”吗？笔记本身不会被删除，但问答将不再引用它。`)) return;
+    setKbBusy(true);
+    setKbError(null);
+    try {
+      const updated = await removeNoteFromKnowledgeBase(current.id);
+      setCurrent((open) => (open && open.id === updated.id ? { ...open, knowledgeBase: updated.knowledgeBase } : open));
+    } catch (reason) {
+      setKbError((reason as Error).message);
+    } finally {
+      setKbBusy(false);
+    }
+  };
+
+  // 文档还在处理时轮询状态，直到完成或失败；只更新知识库状态，不覆盖正在编辑的内容
+  const currentId = current?.id;
+  const kbStatus = current?.knowledgeBase?.status;
+  useEffect(() => {
+    if (!currentId || !kbStatus || kbStatus === "done" || kbStatus === "failed") return;
+    const timer = window.setInterval(() => {
+      getNote(currentId)
+        .then((fresh) =>
+          setCurrent((open) =>
+            open && open.id === fresh.id && fresh.knowledgeBase
+              ? { ...open, knowledgeBase: { ...fresh.knowledgeBase, outdated: fresh.knowledgeBase.outdated || Boolean(open.knowledgeBase?.outdated) } }
+              : open,
+          ),
+        )
+        .catch(console.error);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [currentId, kbStatus]);
+
   const selectNote = async (id: number) => {
     await flush();
     try {
       setCurrent(await getNote(id));
+      setKbError(null);
+      setIsKbMenuOpen(false);
       setAiDraft(null);
       setAiError(null);
       setSelection({ start: 0, end: 0 });
@@ -433,6 +507,50 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
                     }
                   }}
                 />
+              </div>
+              <div className="note-kb">
+                {current.knowledgeBase ? (
+                  <>
+                    <LibraryBig size={13} />
+                    <span>已加入「{current.knowledgeBase.knowledgeBaseName}」</span>
+                    <em className={current.knowledgeBase.status === "failed" ? "is-failed" : undefined} title={current.knowledgeBase.errorMessage ?? undefined}>
+                      {current.knowledgeBase.status === "failed"
+                        ? "处理失败"
+                        : current.knowledgeBase.status === "done"
+                          ? current.knowledgeBase.outdated
+                            ? "有未同步的修改"
+                            : "已同步"
+                          : current.knowledgeBase.status === "pending"
+                            ? "等待处理"
+                            : "处理中…"}
+                    </em>
+                    {(current.knowledgeBase.outdated || current.knowledgeBase.status === "failed") && (
+                      <button type="button" disabled={kbBusy} onClick={() => void syncToKnowledgeBase(current.knowledgeBase!.knowledgeBaseId)}>
+                        {current.knowledgeBase.status === "failed" ? "重试" : "更新到知识库"}
+                      </button>
+                    )}
+                    <button type="button" disabled={kbBusy} onClick={openKbMenu}>更换</button>
+                    <button type="button" disabled={kbBusy} onClick={() => void leaveKnowledgeBase()}>移出</button>
+                  </>
+                ) : (
+                  <button type="button" disabled={kbBusy} onClick={openKbMenu}>
+                    <LibraryBig size={13} /> {kbBusy ? "正在加入…" : "加入知识库"}
+                  </button>
+                )}
+                {isKbMenuOpen && (
+                  <>
+                    <button className="menu-backdrop" type="button" aria-label="关闭菜单" onClick={() => setIsKbMenuOpen(false)} />
+                    <div className="conversation-menu" role="menu">
+                      {kbList.map((base) => (
+                        <button type="button" role="menuitem" key={base.id} onClick={() => void syncToKnowledgeBase(base.id)}>
+                          {base.name}
+                        </button>
+                      ))}
+                      {kbList.length === 0 && <small className="notes-tag-empty">还没有知识库</small>}
+                    </div>
+                  </>
+                )}
+                {kbError && <span className="note-kb-error" role="alert">{kbError}</span>}
               </div>
             </div>
             <div className="editor-actions">

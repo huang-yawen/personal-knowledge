@@ -334,3 +334,19 @@
 .reader-chunk:hover .reader-extract, .reader-chunk:focus-within .reader-extract, .reader-extract:disabled { opacity: 1; }
 .reader-extract:hover:not(:disabled) { color: var(--text); background: var(--hover); }
 @media (hover: none) { .reader-extract { opacity: 1; } }
+
+/* 全局错误边界 */
+.error-boundary { min-height: 100vh; padding: 16px; display: grid; place-content: center; justify-items: center; gap: 10px; background: var(--surface); color: var(--text); text-align: center; }
+.error-boundary p { max-width: 520px; color: var(--muted); font-size: 13px; word-break: break-word; }
+.error-boundary button { height: 34px; padding: 0 18px; border: 0; border-radius: 17px; background: var(--text); color: var(--surface); font-size: 13px; cursor: pointer; }
+
+/* 笔记：加入知识库 */
+.note-kb { position: relative; margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.note-kb > span { color: var(--text); }
+.note-kb em { font-style: normal; }
+.note-kb em.is-failed, .note-kb-error { color: var(--status-failed); }
+.note-kb button:not(.menu-backdrop) { height: 24px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.note-kb button:not(.menu-backdrop):hover:not(:disabled) { background: var(--hover); }
+.note-kb button:disabled { opacity: .5; cursor: default; }
+.note-kb .conversation-menu { left: 0; right: auto; top: calc(100% + 2px); max-height: 260px; overflow-y: auto; }
+.note-kb .conversation-menu button { height: 34px; padding: 0 10px; border: 0; border-radius: 8px; font-size: 13px; }

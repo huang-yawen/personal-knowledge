@@ -1,6 +1,13 @@
 import { Router, type Response } from "express";
 import { config } from "../../config";
-import { ownsKnowledgeBases, parseIdList, parseOptionalId, retrieveChunks, type RetrievedChunk } from "../rag/retrieve";
+import {
+  describeRetrievalError,
+  ownsKnowledgeBases,
+  parseIdList,
+  parseOptionalId,
+  retrieveChunks,
+  type RetrievedChunk,
+} from "../rag/retrieve";
 import {
   conversationExists,
   createConversation,
@@ -172,7 +179,10 @@ chatRouter.post("/", async (req, res) => {
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
     const retrievalStartedAt = Date.now();
-    const chunks = await retrieveChunks(question, { knowledgeBaseIds });
+    const chunks = await retrieveChunks(question, { knowledgeBaseIds }).catch((error: unknown) => {
+      console.error("检索失败", error);
+      throw new ModelError(describeRetrievalError(error));
+    });
     retrievalMs = Date.now() - retrievalStartedAt;
     hits = chunks.length;
     topScore = chunks[0]?.score;

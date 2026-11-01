@@ -7,12 +7,23 @@ type EmbeddingResponse = { data: { index: number; embedding: number[] }[] };
 
 const requestEmbeddings = async (input: string[]): Promise<number[][]> => {
   for (let attempt = 1; ; attempt++) {
-    const response = await fetch(`${config.embedding.baseUrl}/embeddings`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.embedding.apiKey}` },
-      body: JSON.stringify({ model: config.embedding.model, input }),
-      signal: AbortSignal.timeout(60_000),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${config.embedding.baseUrl}/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.embedding.apiKey}` },
+        body: JSON.stringify({ model: config.embedding.model, input }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (error) {
+      // 网络抖动（连接超时、连接被重置等）时重试；仍失败则带上具体原因，方便定位
+      if (attempt < 3) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      const code = (error as { cause?: { code?: string } }).cause?.code;
+      throw new Error(`Embedding 网络请求失败${code ? `（${code}）` : ""}：${error instanceof Error ? error.message : String(error)}`);
+    }
     if (response.ok) {
       const body = (await response.json()) as EmbeddingResponse;
       return body.data.sort((a, b) => a.index - b.index).map((item) => item.embedding);
