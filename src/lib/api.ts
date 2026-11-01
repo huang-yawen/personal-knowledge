@@ -193,3 +193,9 @@ export const updateNote = (id: number, patch: NotePatch) =>
   request<NoteDto>(`/notes/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
 export const deleteNote = (id: number) => request<void>(`/notes/${id}`, { method: "DELETE" });
+
+export type NoteAiAction = "summary" | "outline" | "keywords" | "explain" | "rewrite" | "polish";
+
+// 只返回候选内容，不会修改笔记
+export const runNoteAi = (action: NoteAiAction, text: string) =>
+  request<{ result: string }>("/notes/ai", { method: "POST", body: JSON.stringify({ action, text }) });

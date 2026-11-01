@@ -19,11 +19,13 @@ import {
   createNote,
   deleteNote,
   getNote,
+  runNoteAi,
   listNotes,
   listNoteTags,
   updateNote,
   type NoteDto,
   type NoteListItemDto,
+  type NoteAiAction,
   type NotePatch,
   type NoteSourceDto,
 } from "@/lib/api";
@@ -38,6 +40,19 @@ const formatTime = (iso: string) => {
   return new Date(iso).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 };
 
+// AI 操作：replace 为 true 的会替换原文，其余在选区之后（或文末）插入
+const AI_ACTIONS: { action: NoteAiAction; label: string; replace?: boolean }[] = [
+  { action: "summary", label: "总结" },
+  { action: "outline", label: "提纲" },
+  { action: "keywords", label: "关键词" },
+  { action: "explain", label: "概念解释" },
+  { action: "rewrite", label: "改写", replace: true },
+  { action: "polish", label: "润色", replace: true },
+];
+
+// AI 候选内容：original 为生成时送去处理的原文，range 为原文在笔记中的选区（整篇时为 null）
+type AiDraft = { noteId: number; action: NoteAiAction; result: string; original: string; range: { start: number; end: number } | null };
+
 const toListItem = (note: NoteDto): NoteListItemDto => ({ ...note, preview: note.content.slice(0, 200) });
 
 export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void }) {
@@ -45,7 +60,10 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
   const [current, setCurrent] = useState<NoteDto | null>(null);
   const [query, setQuery] = useState("");
   const [isPreview, setIsPreview] = useState(false);
-  const [aiDraft, setAiDraft] = useState<string | null>(null);
+  const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +157,8 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
     try {
       setCurrent(await getNote(id));
       setAiDraft(null);
+      setAiError(null);
+      setSelection({ start: 0, end: 0 });
       setSaveState("saved");
     } catch (reason) {
       setError((reason as Error).message);
@@ -162,6 +182,8 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       setCurrent(note);
       setIsPreview(false);
       setAiDraft(null);
+      setAiError(null);
+      setSelection({ start: 0, end: 0 });
       setSaveState("saved");
     } catch (reason) {
       setError((reason as Error).message);
@@ -181,18 +203,48 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       setError((reason as Error).message);
     }
   };
-  const createAiDraft = () =>
-    current &&
-    setAiDraft(
-      `# ${current.title}\n\n## 核心摘要\n\n${current.content
-        .replace(/^#.*\n?/, "")
-        .split("\n")
-        .filter(Boolean)
-        .slice(0, 3)
-        .join(
-          " ",
-        )}\n\n## 建议的后续行动\n\n- 补充可验证的资料来源\n- 在下一次回顾时更新理解\n`,
-    );
+  // 有选中文字时只处理选区，否则处理整篇
+  const aiRange = current && selection.end > selection.start && selection.end <= current.content.length ? selection : null;
+
+  const runAi = async (action: NoteAiAction) => {
+    if (!current) return;
+    const original = aiRange ? current.content.slice(aiRange.start, aiRange.end) : current.content;
+    if (!original.trim()) {
+      setAiError("笔记还没有内容");
+      return;
+    }
+    setAiBusy(true);
+    setAiError(null);
+    setAiDraft(null);
+    try {
+      const { result } = await runNoteAi(action, original);
+      setAiDraft({ noteId: current.id, action, result, original, range: aiRange });
+    } catch (reason) {
+      setAiError((reason as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  // 用户确认后才写入笔记；选区位置可能因期间的编辑而偏移，先核对原文
+  const applyAiDraft = () => {
+    if (!current || !aiDraft || aiDraft.noteId !== current.id) return;
+    const { action, result, original, range } = aiDraft;
+    const content = current.content;
+    const start = range && content.slice(range.start, range.end) === original ? range.start : content.indexOf(original);
+    if (start < 0) {
+      setAiError("原文已发生变化，请重新生成");
+      setAiDraft(null);
+      return;
+    }
+    const end = start + original.length;
+    const replace = AI_ACTIONS.find((item) => item.action === action)?.replace;
+    edit({ content: replace ? content.slice(0, start) + result + content.slice(end) : `${content.slice(0, end)}\n\n${result}${content.slice(end)}` });
+    setAiDraft(null);
+  };
+
+  // 草稿只对生成它的那篇笔记有效
+  const draft = aiDraft && aiDraft.noteId === current?.id ? aiDraft : null;
 
   return (
     <div className="notes-page">
@@ -373,6 +425,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
               value={current.content}
               placeholder="开始记录你的想法…"
               onChange={(event) => edit({ content: event.target.value })}
+              onSelect={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
               spellCheck
             />
           )}
@@ -406,47 +459,49 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
             </span>
             <div>
               <strong>AI 笔记辅助</strong>
-              <p>基于当前笔记生成候选内容</p>
+              <p>基于当前笔记或选区生成候选内容</p>
             </div>
           </div>
+          <p className="ai-scope">
+            作用范围：{aiRange ? `选中的 ${aiRange.end - aiRange.start} 字` : "整篇笔记"}
+          </p>
           <div className="ai-actions">
-            <button type="button" onClick={createAiDraft}>
-              总结笔记
-            </button>
-            <button type="button" onClick={createAiDraft}>
-              提取知识点
-            </button>
-            <button type="button" onClick={createAiDraft}>
-              优化表达
-            </button>
+            {AI_ACTIONS.map((item) => (
+              <button type="button" key={item.action} disabled={aiBusy} onClick={() => void runAi(item.action)}>
+                {item.label}
+              </button>
+            ))}
           </div>
-          {aiDraft ? (
+          {aiBusy && <p className="ai-status">正在生成…</p>}
+          {aiError && <p className="form-error" role="alert">{aiError}</p>}
+          {draft ? (
             <div className="ai-draft">
-              <p className="section-kicker">AI 生成草稿</p>
+              <p className="section-kicker">AI 候选内容</p>
+              {AI_ACTIONS.find((item) => item.action === draft.action)?.replace && (
+                <details className="ai-original">
+                  <summary>查看原文</summary>
+                  <pre>{draft.original}</pre>
+                </details>
+              )}
               <div className="ai-draft-content">
-                <MarkdownPreview content={aiDraft} />
+                <MarkdownPreview content={draft.result} />
               </div>
               <div className="ai-draft-actions">
                 <button type="button" onClick={() => setAiDraft(null)}>
                   保留原文
                 </button>
-                <button
-                  type="button"
-                  className="accept-draft"
-                  onClick={() => {
-                    edit({ content: aiDraft });
-                    setAiDraft(null);
-                  }}
-                >
-                  应用草稿 <Check size={14} />
+                <button type="button" className="accept-draft" onClick={applyAiDraft}>
+                  {AI_ACTIONS.find((item) => item.action === draft.action)?.replace ? "替换原文" : "插入笔记"} <Check size={14} />
                 </button>
               </div>
             </div>
           ) : (
-            <div className="ai-guidance">
-              <Sparkles size={17} />
-              <p>AI 的修改始终以草稿形式展示，需要你确认后才会覆盖笔记内容。</p>
-            </div>
+            !aiBusy && (
+              <div className="ai-guidance">
+                <Sparkles size={17} />
+                <p>AI 只生成候选内容，需要你确认后才会写入笔记。选中一段文字可只处理选区。</p>
+              </div>
+            )
           )}
         </aside>
         )}
