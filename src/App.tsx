@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from "react";
-import { Bell, ChevronLeft, ChevronRight, FileText, Grid2X2, LibraryBig, Menu, MessageSquareText, Moon, MoreHorizontal, Plus, Search, Settings2, Sparkles, Sun, UserRound, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Grid2X2, LibraryBig, Menu, MessageSquareText, Moon, MoreHorizontal, Settings2, Sparkles, Sun, UserRound, X } from "lucide-react";
 import "./App.css";
+import "./shell.css";
 import { Dashboard } from "@/pages/Dashboard";
 import { ChatPage } from "@/pages/ChatPage";
 import { KnowledgePage } from "@/pages/KnowledgePage";
@@ -38,7 +39,7 @@ function App() {
     localStorage.setItem("theme", dark ? "dark" : "light");
   };
 
-  const currentTitle = activeNav;
+  const isBleed = activeNav === "AI 对话" || activeNav === "我的知识库";
 
   return (
     <div className={`app-shell${isCollapsed ? " sidebar-collapsed" : ""}`}>
@@ -77,6 +78,10 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
+          <button className="nav-item" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => changeTheme(!isDark)}>
+            {isDark ? <Sun size={19} strokeWidth={1.8} /> : <Moon size={19} strokeWidth={1.8} />}
+            <span>{isDark ? "浅色模式" : "深色模式"}</span>
+          </button>
           <button className="nav-item" type="button" onClick={() => setActiveNav("个人中心")}>
             <Settings2 size={19} strokeWidth={1.8} />
             <span>设置</span>
@@ -92,22 +97,13 @@ function App() {
       {isSidebarOpen && <button className="sidebar-scrim" type="button" aria-label="关闭导航菜单" onClick={() => setIsSidebarOpen(false)} />}
 
       <main className="main-content">
-        <header className="topbar">
-          <div className="page-identity">
-            <p className="eyebrow">个人知识空间</p>
-            <h1>{currentTitle}</h1>
+        {isBleed ? (
+          <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : <KnowledgePage />}</div>
+        ) : (
+          <div className="page-scroll">
+            {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "我的笔记" ? <NotesPage /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
           </div>
-          <div className="topbar-actions">
-            <button className="icon-button search-button" type="button" aria-label="搜索"><Search size={19} /><span>搜索</span><kbd>⌘ K</kbd></button>
-            <button className="icon-button" type="button" aria-label="通知"><Bell size={19} /></button>
-            <button className="icon-button" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => changeTheme(!isDark)}>
-              {isDark ? <Sun size={19} /> : <Moon size={19} />}
-            </button>
-            <button className="create-button" type="button"><Plus size={18} /> <span>新建</span></button>
-          </div>
-        </header>
-
-        {activeNav === "工作台" ? <Dashboard /> : activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : activeNav === "我的笔记" ? <NotesPage /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
+        )}
       </main>
 
       <button className="sidebar-toggle" type="button" aria-label="折叠侧边栏" onClick={() => setIsCollapsed((value) => !value)}>

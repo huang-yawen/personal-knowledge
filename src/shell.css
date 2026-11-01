@@ -1,0 +1,59 @@
+/* 企业级外壳：去掉顶栏与卡片套卡片，页面铺满视口，栏与栏之间用细线分隔 */
+.app-shell { height: 100dvh; min-height: 0; overflow: hidden; }
+.main-content { height: 100dvh; padding: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+.page-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 38px 50px; background: var(--app-bg); }
+.page-bleed { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* 侧栏：品牌 + 导航 + 底部工具 */
+.sidebar { height: 100dvh; }
+.nav-list { margin-top: 20px; }
+.nav-item { height: 38px; font-size: 13px; }
+.sidebar-bottom .nav-item { height: 36px; }
+.sidebar-toggle { top: 24px; left: 247px; }
+
+/* 对话页：三栏通栏 */
+.chat-page { max-width: none; min-height: 0; flex: 1; margin: 0; }
+.chat-toolbar { min-height: 52px; padding: 0 20px; background: var(--surface); }
+.chat-workspace { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+
+/* 知识库页：左列表 + 右详情通栏，页头收成一行 */
+.knowledge-page { max-width: none; margin: 0; padding: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.knowledge-page-head { align-items: center; padding: 0 20px; min-height: 52px; border-bottom: 1px solid var(--line); }
+.knowledge-page-head .eyebrow, .knowledge-page-head > div > p:last-child { display: none; }
+.knowledge-page-head h2 { margin: 0; font-size: 15px; letter-spacing: 0; }
+.knowledge-page > .form-error { padding: 8px 20px; }
+.knowledge-layout { flex: 1; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.knowledge-list-section { overflow-y: auto; }
+.knowledge-detail-section { overflow-y: auto; }
+
+/* 其余页面在滚动容器里保持原有内容宽度 */
+.page-scroll > .dashboard, .page-scroll > .notes-page, .page-scroll > .profile-page { padding-top: 32px; }
+.topbar-less-title { display: none; }
+
+@media (max-width: 760px) {
+  .main-content { height: 100dvh; }
+  .page-scroll { padding: 56px 17px 32px; }
+  .page-bleed { padding-top: 48px; }
+  .sidebar-toggle { display: none; }
+}
+
+/* 工作台：参考 ChatGPT 首页，居中窄栏、无卡片、单色图标 */
+.page-scroll { background: var(--sidebar); }
+.home { max-width: 720px; margin: 0 auto; padding: 14vh 0 48px; }
+.home-title { font-size: 30px; font-weight: 600; letter-spacing: -.03em; text-align: center; }
+.home-sub { margin-top: 10px; color: var(--muted); font-size: 15px; text-align: center; }
+.home-ask { width: 100%; margin-top: 36px; min-height: 58px; padding: 0 12px 0 22px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 28px; background: var(--surface); color: var(--muted); font-size: 15px; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .04); transition: box-shadow .16s; }
+.home-ask:hover { box-shadow: 0 4px 18px rgba(0, 0, 0, .08); }
+.home-ask-send { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--text); color: var(--surface); }
+.home-chips { margin-top: 18px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.home-chip { height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 18px; background: transparent; color: var(--text); font-size: 13px; cursor: pointer; }
+.home-chip:hover { background: var(--surface-soft); }
+.home-chip svg { color: var(--muted); }
+.home-recent { margin-top: 48px; }
+.home-recent h2 { padding: 0 12px 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.home-recent-item { width: 100%; padding: 11px 12px; display: flex; align-items: center; gap: 12px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font-size: 14px; text-align: left; cursor: pointer; }
+.home-recent-item:hover { background: var(--surface-soft); }
+.home-recent-item svg { color: var(--muted); flex: none; }
+.home-recent-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-recent-item small { margin-left: auto; padding-left: 16px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .home { padding-top: 8vh; } .home-recent-item small { display: none; } }
