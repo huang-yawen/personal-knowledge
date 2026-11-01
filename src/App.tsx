@@ -42,7 +42,7 @@ function App() {
     localStorage.setItem("theme", dark ? "dark" : "light");
   };
 
-  const isBleed = activeNav === "AI 对话" || activeNav === "我的知识库";
+  const isBleed = activeNav === "AI 对话" || activeNav === "我的知识库" || activeNav === "我的笔记";
 
   return (
     <div className={`app-shell${isCollapsed ? " sidebar-collapsed" : ""}`}>
@@ -103,10 +103,10 @@ function App() {
 
       <main className="main-content">
         {isBleed ? (
-          <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : <KnowledgePage />}</div>
+          <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : <NotesPage />}</div>
         ) : (
           <div className="page-scroll">
-            {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "我的笔记" ? <NotesPage /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
+            {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
           </div>
         )}
       </main>

@@ -20,22 +20,31 @@ export const conversationExists = async (id: number) => {
   return rows.length > 0;
 };
 
-export const createConversation = async (title: string, knowledgeBaseId: number | undefined) => {
-  const [result] = await pool.query<ResultSetHeader>(
-    "INSERT INTO conversations (user_id, title, knowledge_base_id) VALUES (?, ?, ?)",
-    [config.devUserId, title, knowledgeBaseId ?? null],
-  );
+// 把会话的检索范围整体替换为给定的知识库（空数组表示全部知识库）
+const replaceScope = async (conversationId: number, knowledgeBaseIds: number[]) => {
+  await pool.query("DELETE FROM conversation_knowledge_bases WHERE conversation_id = ?", [conversationId]);
+  if (knowledgeBaseIds.length > 0) {
+    await pool.query("INSERT INTO conversation_knowledge_bases (conversation_id, knowledge_base_id) VALUES ?", [
+      knowledgeBaseIds.map((id) => [conversationId, id]),
+    ]);
+  }
+};
+
+export const createConversation = async (title: string, knowledgeBaseIds: number[]) => {
+  const [result] = await pool.query<ResultSetHeader>("INSERT INTO conversations (user_id, title) VALUES (?, ?)", [
+    config.devUserId,
+    title,
+  ]);
+  await replaceScope(result.insertId, knowledgeBaseIds);
   await recordActivity(config.devUserId, "conversation_started", title, result.insertId);
   return result.insertId;
 };
 
-// 更新提问范围并刷新更新时间（值没变时 ON UPDATE 不会触发，所以显式写）
-export const touchConversation = (id: number, knowledgeBaseId: number | undefined) =>
-  pool.query("UPDATE conversations SET knowledge_base_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", [
-    knowledgeBaseId ?? null,
-    id,
-    config.devUserId,
-  ]);
+// 更新提问范围并刷新更新时间
+export const touchConversation = async (id: number, knowledgeBaseIds: number[]) => {
+  await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", [id, config.devUserId]);
+  await replaceScope(id, knowledgeBaseIds);
+};
 
 // 让库里的历史与界面一致：保留与界面历史相同的前缀，其后的旧消息删除，界面多出的新消息写入。
 // 这样“重新生成”“编辑后重发”都不会留下重复或过期的消息

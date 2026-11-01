@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LibraryBig, Sparkles } from "lucide-react";
+import { ChevronDown, LibraryBig, Sparkles } from "lucide-react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
@@ -7,30 +7,51 @@ import { MyRuntimeProvider } from "@/MyRuntimeProvider";
 
 export function ChatPage() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDto[]>([]);
-  const { knowledgeBaseId, setKnowledgeBaseId, threadKey, initialMessages } = useChatStore();
+  const [isScopeOpen, setIsScopeOpen] = useState(false);
+  const { knowledgeBaseIds, setKnowledgeBaseIds, threadKey, initialMessages } = useChatStore();
 
   useEffect(() => {
     listKnowledgeBases().then(setKnowledgeBases).catch(console.error);
   }, []);
 
+  // 范围按钮上的文字：全部 / 单个知识库名 / N 个知识库
+  const scopeLabel =
+    knowledgeBaseIds.length === 0
+      ? "全部知识库"
+      : knowledgeBaseIds.length === 1
+        ? (knowledgeBases.find((base) => base.id === knowledgeBaseIds[0])?.name ?? "1 个知识库")
+        : `${knowledgeBaseIds.length} 个知识库`;
+
+  const toggleBase = (id: number) =>
+    setKnowledgeBaseIds(knowledgeBaseIds.includes(id) ? knowledgeBaseIds.filter((item) => item !== id) : [...knowledgeBaseIds, id]);
+
   return (
     <div className="chat-page">
       <div className="chat-toolbar">
-        <label className="library-selector">
-          <LibraryBig size={16} />
-          <select
-            aria-label="知识库范围"
-            value={knowledgeBaseId ?? ""}
-            onChange={(event) => setKnowledgeBaseId(event.target.value ? Number(event.target.value) : null)}
-          >
-            <option value="">全部知识库</option>
-            {knowledgeBases.map((base) => (
-              <option key={base.id} value={base.id}>
-                {base.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="scope-picker">
+          <button className="library-selector" type="button" aria-haspopup="true" aria-expanded={isScopeOpen} onClick={() => setIsScopeOpen((open) => !open)}>
+            <LibraryBig size={16} />
+            <span>{scopeLabel}</span>
+            <ChevronDown size={15} />
+          </button>
+          {isScopeOpen && (
+            <>
+              <button className="scope-backdrop" type="button" aria-label="关闭知识库范围" onClick={() => setIsScopeOpen(false)} />
+              <div className="scope-menu" role="group" aria-label="知识库范围">
+                <label>
+                  <input type="checkbox" checked={knowledgeBaseIds.length === 0} onChange={() => setKnowledgeBaseIds([])} />
+                  <span>全部知识库</span>
+                </label>
+                {knowledgeBases.map((base) => (
+                  <label key={base.id}>
+                    <input type="checkbox" checked={knowledgeBaseIds.includes(base.id)} onChange={() => toggleBase(base.id)} />
+                    <span>{base.name}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       <div className="chat-workspace">
         <section className="chat-thread-shell" aria-label="AI 对话">

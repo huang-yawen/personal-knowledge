@@ -70,14 +70,14 @@ export type ChatEvent =
 // 读取问答接口的 SSE 流，逐个产出事件
 export async function* streamChat(
   messages: { role: "user" | "assistant"; content: string }[],
-  knowledgeBaseId: number | null,
+  knowledgeBaseIds: number[],
   conversationId: number | null,
   signal: AbortSignal,
 ): AsyncGenerator<ChatEvent> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, knowledgeBaseId, conversationId }),
+    body: JSON.stringify({ messages, knowledgeBaseIds, conversationId }),
     signal,
   });
   if (!response.ok || !response.body) {
@@ -104,7 +104,10 @@ export async function* streamChat(
 export type ConversationDto = {
   id: number;
   title: string;
-  knowledgeBaseId: number | null;
+  // 检索范围，空数组表示全部知识库
+  knowledgeBaseIds: number[];
+  isFavorite: boolean;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -113,7 +116,11 @@ export type ConversationDetailDto = ConversationDto & {
   messages: { id: number; role: "user" | "assistant"; content: string; citations: ChatSource[] | null }[];
 };
 
-export const listConversations = () => request<ConversationDto[]>("/conversations");
+export const listConversations = (query = "", archived = false) =>
+  request<ConversationDto[]>(`/conversations?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(archived ? { archived: "1" } : {}) })}`);
+
+export const updateConversation = (id: number, patch: { title?: string; isFavorite?: boolean; archived?: boolean }) =>
+  request<ConversationDto>(`/conversations/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
 export const getConversation = (id: number) => request<ConversationDetailDto>(`/conversations/${id}`);
 
@@ -142,3 +149,6 @@ export const listActivities = (before?: number) =>
   request<ActivityDto[]>(`/activities?limit=30${before ? `&before=${before}` : ""}`);
 
 export const retryDocument = (id: number) => request<DocumentDto>(`/documents/${id}/retry`, { method: "POST" });
+
+export const renameDocument = (id: number, name: string) =>
+  request<DocumentDto>(`/documents/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });

@@ -21,6 +21,7 @@ export function NotesPage() {
   const [query, setQuery] = useState("");
   const [isPreview, setIsPreview] = useState(false);
   const [aiDraft, setAiDraft] = useState<string | null>(null);
+  const [isAiOpen, setIsAiOpen] = useState(false);
   const selectedNote = notes.find((note) => note.id === selectedId) ?? notes[0];
   const visibleNotes = notes.filter((note) =>
     `${note.title} ${note.category} ${note.tags.join(" ")}`
@@ -74,7 +75,7 @@ export function NotesPage() {
           <FilePlus2 size={17} /> 新建笔记
         </button>
       </div>
-      <div className="notes-workspace">
+      <div className={`notes-workspace${isAiOpen ? " has-ai" : ""}`}>
         <aside className="notes-list-panel">
           <div className="notes-search">
             <Search size={16} />
@@ -163,6 +164,13 @@ export function NotesPage() {
               >
                 <EyeIcon /> 预览
               </button>
+              <button
+                type="button"
+                className={isAiOpen ? "is-active" : ""}
+                onClick={() => setIsAiOpen((open) => !open)}
+              >
+                <WandSparkles size={15} /> AI 辅助
+              </button>
               <button type="button" aria-label="更多笔记操作">
                 <MoreHorizontal size={18} />
               </button>
@@ -197,6 +205,7 @@ export function NotesPage() {
           )}
         </section>
 
+        {isAiOpen && (
         <aside className="note-ai-panel">
           <div className="note-ai-heading">
             <span>
@@ -247,6 +256,7 @@ export function NotesPage() {
             </div>
           )}
         </aside>
+        )}
       </div>
     </div>
   );

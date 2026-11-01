@@ -22,5 +22,5 @@ ragRouter.post("/search", async (req, res) => {
     res.status(400).json({ error: "limit 需要在 1 到 20 之间" });
     return;
   }
-  res.json(await retrieveChunks(query, { knowledgeBaseId, limit }));
+  res.json(await retrieveChunks(query, { knowledgeBaseIds: knowledgeBaseId === undefined ? undefined : [knowledgeBaseId], limit }));
 });

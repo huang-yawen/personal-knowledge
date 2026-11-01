@@ -46,7 +46,10 @@ export function DocumentReader() {
       <button className="modal-backdrop" type="button" aria-label="关闭阅读视图" onClick={close} />
       <aside className="reader-panel" role="dialog" aria-label="文档阅读">
         <header className="reader-head">
-          <strong>{loaded?.document.name ?? "加载中…"}</strong>
+          <div className="reader-title">
+            <strong>{loaded?.document.name ?? "加载中…"}</strong>
+            {loaded && <small>{loaded.chunks.length} 个片段{new Set(loaded.chunks.map((chunk) => chunk.page).filter(Boolean)).size > 0 ? ` · ${new Set(loaded.chunks.map((chunk) => chunk.page).filter(Boolean)).size} 页` : ""}</small>}
+          </div>
           <button type="button" aria-label="关闭" onClick={close}><X size={18} /></button>
         </header>
         <div className="reader-body">

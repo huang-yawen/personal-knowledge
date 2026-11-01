@@ -230,3 +230,26 @@ documentRouter.post("/documents/:id/retry", async (req, res) => {
   const [rows] = await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ?`, [id]);
   res.json(rows[0]);
 });
+
+// 重命名只改显示名称（original_name），磁盘上的随机文件名不变；已保存的引用快照保持当时的名字
+documentRouter.patch("/documents/:id", async (req, res) => {
+  const id = parseId(req.params.id);
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name || name.length > 255) {
+    res.status(400).json({ error: "名称不能为空，且不超过 255 个字符" });
+    return;
+  }
+  const [result] = id
+    ? await pool.query<ResultSetHeader>("UPDATE documents SET original_name = ? WHERE id = ? AND user_id = ?", [
+        name,
+        id,
+        config.devUserId,
+      ])
+    : [undefined];
+  if (!id || !result || result.affectedRows === 0) {
+    res.status(404).json({ error: "文档不存在" });
+    return;
+  }
+  const [rows] = await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ?`, [id]);
+  res.json(rows[0]);
+});

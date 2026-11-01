@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, CheckCircle2, CircleAlert, FileUp, LibraryBig, MoreHorizontal, Plus, Search, Settings2, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { ChevronRight, CheckCircle2, CircleAlert, FileUp, LibraryBig, MoreHorizontal, Pencil, Plus, RotateCw, Search, Settings2, Sparkles, Trash2, Upload, X } from "lucide-react";
 import {
   createKnowledgeBase as createKnowledgeBaseApi,
   deleteDocument,
   listDocuments,
   listKnowledgeBases,
+  renameDocument,
+  retryDocument,
   uploadDocument,
   type DocumentDto,
   type KnowledgeBaseDto,
@@ -62,6 +64,7 @@ export function KnowledgePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [documentQuery, setDocumentQuery] = useState("");
   const openReader = useReaderStore((state) => state.open);
   const selectedBase = knowledgeBases.find((item) => item.id === selectedId) ?? knowledgeBases[0];
 
@@ -76,6 +79,7 @@ export function KnowledgePage() {
 
   // 只展示属于当前知识库的文档，切换知识库或上传途中切换时不会串到别的列表
   const visibleDocuments = documents.filter((item) => item.knowledgeBaseId === selectedBaseId);
+  const shownDocuments = visibleDocuments.filter((item) => item.name.toLowerCase().includes(documentQuery.trim().toLowerCase()));
 
   useEffect(() => {
     if (selectedBaseId === undefined) return;
@@ -132,6 +136,30 @@ export function KnowledgePage() {
     }
   };
 
+  const replaceDocument = (updated: DocumentDto) =>
+    setDocuments((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+
+  const renameDocumentAction = async (document: KnowledgeDocument) => {
+    const name = window.prompt("重命名文档", document.name)?.trim();
+    if (!name || name === document.name) return;
+    try {
+      replaceDocument(await renameDocument(document.id, name));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "重命名失败");
+    }
+  };
+
+  // 重试后状态回到等待处理，上面的轮询会自动恢复
+  const retryDocumentAction = async (document: KnowledgeDocument) => {
+    try {
+      replaceDocument(await retryDocument(document.id));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "重试失败");
+    }
+  };
+
   const removeDocument = async (base: KnowledgeBase, document: KnowledgeDocument) => {
     if (!window.confirm(`确定删除“${document.name}”吗？删除后无法恢复。`)) return;
     try {
@@ -162,8 +190,8 @@ export function KnowledgePage() {
         {selectedBase ? (
         <section className="knowledge-detail-section">
           <header className="knowledge-detail-head"><div className="knowledge-detail-title"><span className={`knowledge-cover large ${selectedBase.cover}`}><LibraryBig size={23} /></span><div><h3>{selectedBase.name}</h3><p>{selectedBase.description}</p></div></div><button type="button" className="detail-more" aria-label="知识库更多选项"><MoreHorizontal size={19} /></button></header>
-          <div className="document-toolbar"><div><strong>资料</strong><span>{selectedBase.documents} 个文档</span></div><label className="upload-button"><FileUp size={16} /> 上传资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>
-          {visibleDocuments.length > 0 ? <div className="document-list">{visibleDocuments.map(toDocument).map((document) => <article className="document-row" key={document.id}><span className={`file-type ${document.type.toLowerCase()}`}>{document.type}</span><div className={`document-copy${document.status === "完成" ? " is-clickable" : ""}`} onClick={() => document.status === "完成" && openReader(document.id)}><strong>{document.name}</strong><small>{document.status === "处理失败" && document.errorMessage ? document.errorMessage : `${document.size} · 更新于 ${document.updated}`}</small></div><DocumentStatus status={document.status} /><button type="button" className="document-more" aria-label={`删除 ${document.name}`} onClick={() => removeDocument(selectedBase, document)}><Trash2 size={17} /></button></article>)}</div> : <div className="documents-empty"><span><Upload size={21} /></span><h3>还没有资料</h3><p>上传 PDF、Markdown 或 TXT 文件，开始构建可检索的知识库。</p><label className="upload-button secondary"><FileUp size={16} /> 上传第一份资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>}
+          <div className="document-toolbar"><div><strong>资料</strong><span>{selectedBase.documents} 个文档</span></div><label className="document-search"><Search size={14} /><input value={documentQuery} onChange={(event) => setDocumentQuery(event.target.value)} placeholder="搜索文档" aria-label="搜索文档" /></label><label className="upload-button"><FileUp size={16} /> 上传资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>
+          {visibleDocuments.length > 0 ? <div className="document-list">{shownDocuments.map(toDocument).map((document) => <article className="document-row" key={document.id}><span className={`file-type ${document.type.toLowerCase()}`}>{document.type}</span><div className={`document-copy${document.status === "完成" ? " is-clickable" : ""}`} onClick={() => document.status === "完成" && openReader(document.id)}><strong>{document.name}</strong><small>{document.status === "处理失败" && document.errorMessage ? document.errorMessage : `${document.size} · 更新于 ${document.updated}`}</small></div><DocumentStatus status={document.status} />{document.status === "处理失败" && <button type="button" className="document-more" aria-label={`重试 ${document.name}`} title="重试" onClick={() => retryDocumentAction(document)}><RotateCw size={16} /></button>}<button type="button" className="document-more" aria-label={`重命名 ${document.name}`} title="重命名" onClick={() => renameDocumentAction(document)}><Pencil size={16} /></button><button type="button" className="document-more" aria-label={`删除 ${document.name}`} onClick={() => removeDocument(selectedBase, document)}><Trash2 size={17} /></button></article>)}{shownDocuments.length === 0 && <p className="documents-no-result">没有匹配的文档</p>}</div> : <div className="documents-empty"><span><Upload size={21} /></span><h3>还没有资料</h3><p>上传 PDF、Markdown 或 TXT 文件，开始构建可检索的知识库。</p><label className="upload-button secondary"><FileUp size={16} /> 上传第一份资料<input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) addDocument(selectedBase, file); event.currentTarget.value = ""; }} /></label></div>}
           <div className="processing-note"><Sparkles size={15} /><span>文件上传后会自动解析、分段并建立检索索引。处理完成后即可用于 AI 对话。</span></div>
         </section>
         ) : (

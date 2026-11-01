@@ -12,7 +12,7 @@ import { useChatStore } from "@/lib/chat-store";
 // 调用后端 /api/chat：先收到对话 id 和引用来源，再逐段收到回答文字
 const chatAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const { knowledgeBaseId, conversationId, threadKey, setSources, setConversationId } = useChatStore.getState();
+    const { knowledgeBaseIds, conversationId, threadKey, setSources, setConversationId } = useChatStore.getState();
     // 回答期间用户可能切换了对话，旧回答不能再写入新对话的状态
     const isCurrentThread = () => useChatStore.getState().threadKey === threadKey;
     setSources([]);
@@ -28,7 +28,7 @@ const chatAdapter: ChatModelAdapter = {
 
     let text = "";
     let sources: ChatSource[] = [];
-    for await (const event of streamChat(history, knowledgeBaseId, conversationId, abortSignal)) {
+    for await (const event of streamChat(history, knowledgeBaseIds, conversationId, abortSignal)) {
       if (event.type === "conversation") {
         if (isCurrentThread()) setConversationId(event.id);
       } else if (event.type === "sources") {

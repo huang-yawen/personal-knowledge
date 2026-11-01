@@ -1,6 +1,6 @@
 import { Router, type Response } from "express";
 import { config } from "../../config";
-import { parseOptionalId, retrieveChunks, type RetrievedChunk } from "../rag/retrieve";
+import { ownsKnowledgeBases, parseIdList, parseOptionalId, retrieveChunks, type RetrievedChunk } from "../rag/retrieve";
 import {
   conversationExists,
   createConversation,
@@ -90,14 +90,18 @@ export const chatRouter = Router();
 chatRouter.post("/", async (req, res) => {
   const body = (typeof req.body === "object" && req.body !== null ? req.body : {}) as Record<string, unknown>;
   const messages = parseMessages(body.messages);
-  const knowledgeBaseId = parseOptionalId(body.knowledgeBaseId);
+  const knowledgeBaseIds = parseIdList(body.knowledgeBaseIds);
   const conversationId = parseOptionalId(body.conversationId);
   if (!messages) {
     res.status(400).json({ error: `消息格式不正确（最后一条需为用户消息，单条不超过 ${config.chat.maxMessageChars} 字）` });
     return;
   }
-  if (knowledgeBaseId === "invalid" || conversationId === "invalid") {
+  if (knowledgeBaseIds === "invalid" || conversationId === "invalid") {
     res.status(400).json({ error: "知识库范围或对话 id 不正确" });
+    return;
+  }
+  if (!(await ownsKnowledgeBases(knowledgeBaseIds))) {
+    res.status(404).json({ error: "知识库不存在" });
     return;
   }
   if (conversationId !== undefined && !(await conversationExists(conversationId))) {
@@ -124,12 +128,12 @@ chatRouter.post("/", async (req, res) => {
   try {
     // 先落库：保存用户的提问，并让库里的历史与界面一致（含重新生成、编辑后重发的情况）
     const activeConversationId =
-      conversationId ?? (await createConversation(makeTitle(messages.find((m) => m.role === "user")?.content ?? ""), knowledgeBaseId));
+      conversationId ?? (await createConversation(makeTitle(messages.find((m) => m.role === "user")?.content ?? ""), knowledgeBaseIds));
     await syncMessages(activeConversationId, messages);
-    await touchConversation(activeConversationId, knowledgeBaseId);
+    await touchConversation(activeConversationId, knowledgeBaseIds);
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
-    const chunks = await retrieveChunks(question, { knowledgeBaseId });
+    const chunks = await retrieveChunks(question, { knowledgeBaseIds });
     hits = chunks.length;
     topScore = chunks[0]?.score;
     const sources = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
@@ -159,7 +163,7 @@ chatRouter.post("/", async (req, res) => {
     console.log(
       JSON.stringify({
         event: "chat",
-        knowledgeBaseId: knowledgeBaseId ?? null,
+        knowledgeBaseIds,
         questionChars: question.length,
         hits,
         topScore: topScore === undefined ? null : Number(topScore.toFixed(3)),
