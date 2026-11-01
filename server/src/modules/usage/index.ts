@@ -4,7 +4,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { currentUserId } from "../auth/context";
 
-export type UsageKind = "chat" | "followup" | "summary" | "note_ai" | "note_generate";
+export type UsageKind = "chat" | "followup" | "summary" | "note_ai" | "note_generate" | "doc_summary";
 
 type Window = { count: number; resetAt: number };
 const MAX_ENTRIES = 10_000;

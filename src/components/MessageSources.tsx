@@ -13,7 +13,11 @@ const basisNotes = {
     text: `部分内容来自知识库（带编号，来源见上方标签）；标注“${GENERAL_MARK}”的部分来自模型自身知识，请自行核实。`,
   },
   general: { Icon: Lightbulb, text: "知识库中没有相关内容，以上为模型根据通用知识的回答，请自行核实。" },
+  strictEmpty: { Icon: BookOpen, text: "严格模式：知识库资料不足，没有使用通用知识作答。可在个人中心关闭严格模式。" },
 };
+
+// 严格模式下资料不足时，提示词要求模型使用的固定说法
+const STRICT_EMPTY_MARKS = ["知识库中没有找到相关内容。", "知识库资料中没有足够的信息"];
 
 // 回答下方的来源标签与依据说明：来源保存在消息的 metadata.custom.sources，点击打开阅读抽屉并定位到片段。
 // 依据说明由回答文字和来源推算，历史对话也能显示
@@ -26,7 +30,8 @@ export function MessageSources() {
   if (isStreaming || !text.trim()) return null;
 
   const hasSources = Boolean(sources && sources.length > 0);
-  const note = basisNotes[!hasSources ? "general" : text.includes(GENERAL_MARK) ? "mixed" : "knowledge"];
+  const isStrictEmpty = !hasSources && STRICT_EMPTY_MARKS.some((mark) => text.includes(mark));
+  const note = basisNotes[isStrictEmpty ? "strictEmpty" : !hasSources ? "general" : text.includes(GENERAL_MARK) ? "mixed" : "knowledge"];
 
   return (
     <div className="message-basis-wrap">

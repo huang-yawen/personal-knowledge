@@ -1,5 +1,8 @@
 import { Router, type Response } from "express";
+import type { RowDataPacket } from "mysql2";
 import { config } from "../../config";
+import { pool } from "../../db";
+import { currentUserId } from "../auth/context";
 import {
   describeRetrievalError,
   ownsKnowledgeBases,
@@ -19,7 +22,7 @@ import {
 } from "../conversation/repository";
 import { estimateTokens, recordUsage } from "../usage";
 import { getSettings, type ReplyStyle } from "../settings/repository";
-import { buildSystemPrompt } from "./prompt";
+import { buildSystemPrompt, type PromptOptions } from "./prompt";
 
 type Usage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 
@@ -44,6 +47,7 @@ const streamAnswer = async (
   messages: ChatMessage[],
   chunks: RetrievedChunk[],
   style: ReplyStyle,
+  promptOptions: PromptOptions,
   signal: AbortSignal,
   onDelta: (text: string) => void,
 ) => {
@@ -52,7 +56,7 @@ const streamAnswer = async (
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.deepseek.apiKey}` },
     body: JSON.stringify({
       model: config.deepseek.model,
-      messages: [{ role: "system", content: buildSystemPrompt(chunks, style) }, ...messages],
+      messages: [{ role: "system", content: buildSystemPrompt(chunks, style, promptOptions) }, ...messages],
       stream: true,
       stream_options: { include_usage: true },
       thinking: { type: "disabled" },
@@ -90,6 +94,17 @@ const streamAnswer = async (
   }
   handleLine(buffer.trim());
   return usage;
+};
+
+// 回答指令：限定了知识库范围时取范围内的，未限定（全部知识库）时取实际命中资料所在的知识库
+const loadInstructions = async (knowledgeBaseIds: number[], chunks: RetrievedChunk[]) => {
+  const ids = knowledgeBaseIds.length > 0 ? knowledgeBaseIds : [...new Set(chunks.map((chunk) => chunk.knowledgeBaseId))];
+  if (ids.length === 0) return [];
+  const [rows] = await pool.query<RowDataPacket[]>(
+    "SELECT name, instructions FROM knowledge_bases WHERE user_id = ? AND id IN (?) AND instructions <> ''",
+    [currentUserId(), ids],
+  );
+  return rows.map((row) => ({ name: row.name as string, text: row.instructions as string }));
 };
 
 // 根据问答生成追问建议：非流式短调用，失败时返回空数组，不影响主回答
@@ -205,6 +220,7 @@ chatRouter.post("/", async (req, res) => {
     retrievalMs = Date.now() - retrievalStartedAt;
     hits = chunks.length;
     topScore = chunks[0]?.score;
+    const instructions = await loadInstructions(knowledgeBaseIds, chunks);
     const retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
 
     const onDelta = (text: string) => {
@@ -213,7 +229,7 @@ chatRouter.post("/", async (req, res) => {
       writeEvent(res, { type: "delta", text });
     };
     // 没有检索到资料时也照常调用模型，由提示词引导它用自身知识回答
-    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, settings.replyStyle, controller.signal, onDelta);
+    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, settings.replyStyle, { strict: settings.strictMode, instructions }, controller.signal, onDelta);
     // 只展示回答里真正用 [编号] 引用到的来源；模型用自身知识回答时没有来源
     const cited = citedIndexes(answer);
     const sources = retrieved.filter((source) => cited.has(source.index));

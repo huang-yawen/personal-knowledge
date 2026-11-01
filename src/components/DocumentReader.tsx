@@ -11,7 +11,7 @@ type Result = { id: number; data?: Loaded; error?: string };
 type Extract = { state: "saving" | "saved" | "error"; noteId?: number };
 
 // 文档阅读抽屉：按分块展示解析后的原文，从引用打开时滚动到对应分块并高亮
-export function DocumentReader({ onOpenNote }: { onOpenNote: (noteId: number) => void }) {
+export function DocumentReader({ onOpenNote, onAsk }: { onOpenNote: (noteId: number) => void; onAsk: (question: string, knowledgeBaseId: number) => void }) {
   const { documentId, chunkId, close } = useReaderStore();
   const [result, setResult] = useState<Result | null>(null);
   const targetRef = useRef<HTMLElement | null>(null);
@@ -79,6 +79,21 @@ export function DocumentReader({ onOpenNote }: { onOpenNote: (noteId: number) =>
           <button type="button" aria-label="关闭" onClick={close}><X size={18} /></button>
         </header>
         <RelatedNotes type="document" refId={documentId} onOpen={onOpenNote} />
+        {loaded?.document.summary && (
+          <div className="reader-summary">
+            <small>AI 摘要</small>
+            <p>{loaded.document.summary}</p>
+            {loaded.document.suggestedQuestions && loaded.document.suggestedQuestions.length > 0 && (
+              <div className="reader-questions">
+                {loaded.document.suggestedQuestions.map((question) => (
+                  <button type="button" key={question} title="填入对话输入框" onClick={() => onAsk(question, loaded.document.knowledgeBaseId)}>
+                    {question}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="reader-body">
           {error && <p className="form-error" role="alert">{error}</p>}
           {loaded && loaded.chunks.length === 0 && <p className="reader-empty">该文档还没有可阅读的内容（可能仍在处理中或处理失败）。</p>}

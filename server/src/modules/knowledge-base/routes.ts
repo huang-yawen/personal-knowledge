@@ -12,6 +12,7 @@ type KnowledgeBaseRow = RowDataPacket & {
   id: number;
   name: string;
   description: string;
+  instructions: string;
   createdAt: Date;
   updatedAt: Date;
   documentCount: number;
@@ -32,7 +33,7 @@ const fetchKnowledgeBases = async (options: { id?: number; q?: string } = {}) =>
     params.push(like, like);
   }
   const [rows] = await pool.query<KnowledgeBaseRow[]>(
-    `SELECT kb.id, kb.name, kb.description, kb.created_at AS createdAt, kb.updated_at AS updatedAt,
+    `SELECT kb.id, kb.name, kb.description, kb.instructions, kb.created_at AS createdAt, kb.updated_at AS updatedAt,
             COUNT(d.id) AS documentCount
      FROM knowledge_bases kb
      LEFT JOIN documents d ON d.knowledge_base_id = kb.id
@@ -44,7 +45,7 @@ const fetchKnowledgeBases = async (options: { id?: number; q?: string } = {}) =>
   return rows.map((row) => ({ ...row, documentCount: Number(row.documentCount) }));
 };
 
-type Fields = { name?: string; description?: string };
+type Fields = { name?: string; description?: string; instructions?: string };
 
 // 校验请求体，返回字段或错误文案
 const parseBody = (body: unknown, requireName: boolean): Fields | string => {
@@ -60,7 +61,12 @@ const parseBody = (body: unknown, requireName: boolean): Fields | string => {
     if (input.description.trim().length > 500) return "描述不能超过 500 个字符";
     fields.description = input.description.trim();
   }
-  if (!requireName && fields.name === undefined && fields.description === undefined) return "没有需要修改的内容";
+  if (input.instructions !== undefined) {
+    if (typeof input.instructions !== "string") return "回答指令格式不正确";
+    if (input.instructions.trim().length > 500) return "回答指令不能超过 500 个字符";
+    fields.instructions = input.instructions.trim();
+  }
+  if (!requireName && fields.name === undefined && fields.description === undefined && fields.instructions === undefined) return "没有需要修改的内容";
   return fields;
 };
 
@@ -83,8 +89,8 @@ knowledgeBaseRouter.post("/", async (req, res) => {
     return;
   }
   const [result] = await pool.query<ResultSetHeader>(
-    "INSERT INTO knowledge_bases (user_id, name, description) VALUES (?, ?, ?)",
-    [currentUserId(), fields.name, fields.description ?? ""],
+    "INSERT INTO knowledge_bases (user_id, name, description, instructions) VALUES (?, ?, ?, ?)",
+    [currentUserId(), fields.name, fields.description ?? "", fields.instructions ?? ""],
   );
   const [created] = await fetchKnowledgeBases({ id: result.insertId });
   await recordActivity(currentUserId(), "kb_created", created.name, result.insertId);
@@ -103,9 +109,10 @@ knowledgeBaseRouter.patch("/:id", async (req, res) => {
     res.status(400).json({ error: fields });
     return;
   }
-  await pool.query("UPDATE knowledge_bases SET name = ?, description = ? WHERE id = ? AND user_id = ?", [
+  await pool.query("UPDATE knowledge_bases SET name = ?, description = ?, instructions = ? WHERE id = ? AND user_id = ?", [
     fields.name ?? existing.name,
     fields.description ?? existing.description,
+    fields.instructions ?? existing.instructions,
     id,
     currentUserId(),
   ]);

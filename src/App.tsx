@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentType } from "react";
-import { ChevronLeft, ChevronRight, FileText, Grid2X2, LibraryBig, Menu, MessageSquareText, Moon, MoreHorizontal, Settings2, Sparkles, Sun, UserRound, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Grid2X2, LibraryBig, Menu, MessageSquareText, Moon, MoreHorizontal, Settings2, ShieldCheck, Sparkles, Sun, UserRound, X } from "lucide-react";
 import "./App.css";
 import "./shell.css";
 import "./theme.css";
@@ -8,6 +8,7 @@ import { ChatPage } from "@/pages/ChatPage";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 import { NotesPage } from "@/pages/NotesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
+import { AdminPage } from "@/pages/AdminPage";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ConversationList } from "@/components/ConversationList";
 import { getSettings } from "@/lib/api";
@@ -38,6 +39,9 @@ function App() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("工作台");
   const displayName = useAuthStore((state) => state.user?.displayName ?? "");
+  const isAdmin = useAuthStore((state) => state.user?.isAdmin ?? false);
+  // 管理入口只对管理员显示（后端接口另有校验）
+  const visibleNavItems = isAdmin ? [...navItems, { label: "管理", icon: ShieldCheck }] : navItems;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -57,6 +61,17 @@ function App() {
     useNoteNavStore.getState().request(id);
     useReaderStore.getState().close();
     setActiveNav("我的笔记");
+    setIsSidebarOpen(false);
+  };
+
+  // 从阅读抽屉里的推荐问题跳到新对话：范围限定为该文档所在知识库，问题填进输入框由用户确认后发送
+  const askQuestion = (question: string, knowledgeBaseId: number) => {
+    const chat = useChatStore.getState();
+    chat.newConversation();
+    chat.setKnowledgeBaseIds([knowledgeBaseId]);
+    chat.setPendingQuestion(question);
+    useReaderStore.getState().close();
+    setActiveNav("AI 对话");
     setIsSidebarOpen(false);
   };
 
@@ -90,7 +105,7 @@ function App() {
         </div>
 
         <nav className="nav-list">
-          {navItems.map(({ label, icon: Icon }) => (
+          {visibleNavItems.map(({ label, icon: Icon }) => (
             <button
               className={`nav-item${activeNav === label ? " active" : ""}`}
               type="button"
@@ -129,12 +144,12 @@ function App() {
           <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : <NotesPage onNavigate={setActiveNav} />}</div>
         ) : (
           <div className="page-scroll">
-            {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
+            {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : activeNav === "管理" && isAdmin ? <AdminPage /> : <PlaceholderPage page={activeNav} />}
           </div>
         )}
       </main>
 
-      <DocumentReader onOpenNote={openNote} />
+      <DocumentReader onOpenNote={openNote} onAsk={askQuestion} />
 
       <button className="sidebar-toggle" type="button" aria-label="折叠侧边栏" onClick={() => setIsCollapsed((value) => !value)}>
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

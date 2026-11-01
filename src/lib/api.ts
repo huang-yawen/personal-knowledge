@@ -2,6 +2,8 @@ export type KnowledgeBaseDto = {
   id: number;
   name: string;
   description: string;
+  // 给 AI 的回答指令，会拼进提示词
+  instructions: string;
   documentCount: number;
   createdAt: string;
   updatedAt: string;
@@ -19,6 +21,9 @@ export type DocumentDto = {
   errorMessage: string | null;
   // 由笔记生成的文档，值为来源笔记 id
   sourceNoteId: number | null;
+  // 处理完成后由 AI 生成，可能为空（笔记生成的文档、额度用完或生成失败时没有）
+  summary: string | null;
+  suggestedQuestions: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -46,7 +51,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const listKnowledgeBases = () => request<KnowledgeBaseDto[]>("/knowledge-bases");
 
-export const createKnowledgeBase = (input: { name: string; description?: string }) =>
+export const createKnowledgeBase = (input: { name: string; description?: string; instructions?: string }) =>
   request<KnowledgeBaseDto>("/knowledge-bases", { method: "POST", body: JSON.stringify(input) });
 
 export const listDocuments = (knowledgeBaseId: number) =>
@@ -264,6 +269,8 @@ export type SettingsDto = {
   topK: number;
   // 新对话默认的知识库范围，空数组表示全部
   defaultKnowledgeBaseIds: number[];
+  // 严格模式：只依据知识库资料回答
+  strictMode: boolean;
 };
 
 export const getSettings = () => request<SettingsDto>("/settings");
@@ -299,3 +306,33 @@ export const exportData = async () => {
 
 export const deleteAccount = (password: string) =>
   request<void>("/account", { method: "DELETE", body: JSON.stringify({ password }) });
+
+export const updateKnowledgeBase = (id: number, input: { name: string; description: string; instructions: string }) =>
+  request<KnowledgeBaseDto>(`/knowledge-bases/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+
+// 管理员接口
+export type AdminInviteDto = { code: string; createdAt: string; usedAt: string | null; usedBy: string | null };
+
+export type AdminUserDto = {
+  id: number;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+  createdAt: string;
+  documents: number;
+  notes: number;
+  conversations: number;
+  tokensToday: number;
+  tokensTotal: number;
+};
+
+export const listInvites = () => request<AdminInviteDto[]>("/admin/invites");
+
+export const createInvite = () => request<{ code: string }>("/admin/invites", { method: "POST" });
+
+export const deleteInvite = (code: string) => request<void>(`/admin/invites/${encodeURIComponent(code)}`, { method: "DELETE" });
+
+export const listAdminUsers = () => request<AdminUserDto[]>("/admin/users");
+
+export const resetUserPassword = (id: number, newPassword: string) =>
+  request<void>(`/admin/users/${id}/password`, { method: "POST", body: JSON.stringify({ newPassword }) });

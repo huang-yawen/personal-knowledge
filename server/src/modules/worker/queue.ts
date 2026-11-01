@@ -8,6 +8,7 @@ import { embedTexts } from "../rag/embedding";
 import { deleteVectors, upsertPoints } from "../rag/qdrant";
 import { chunkText } from "./chunk";
 import { parseFile } from "./parse";
+import { summarizeDocument } from "./summary";
 
 const INSERT_BATCH = 500;
 const pending: number[] = [];
@@ -87,6 +88,8 @@ const processDocument = async (id: number) => {
     }
     await setStatus(id, "done");
     await recordActivity(doc.user_id, "doc_ready", doc.original_name, id);
+    // 摘要在后台生成，不阻塞队列里的下一份文档
+    void summarizeDocument(id, doc.user_id);
   } catch (error) {
     console.error(`文档 ${id} 处理失败`, error);
     const message = error instanceof Error ? error.message : String(error);

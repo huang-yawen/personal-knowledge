@@ -8,13 +8,14 @@ settingsRouter.get("/", async (_req, res) => {
   res.json(await getSettings());
 });
 
-// 整体替换：三项都必须传
+// 整体替换：四项都必须传
 settingsRouter.put("/", async (req, res) => {
   const body = (typeof req.body === "object" && req.body !== null ? req.body : {}) as Record<string, unknown>;
   const replyStyle = REPLY_STYLES.find((style) => style === body.replyStyle);
   const topK = body.topK;
   const ids = parseIdList(body.defaultKnowledgeBaseIds);
-  if (!replyStyle || typeof topK !== "number" || !Number.isInteger(topK) || topK < 1 || topK > MAX_TOP_K || ids === "invalid") {
+  const strictMode = body.strictMode;
+  if (!replyStyle || typeof topK !== "number" || !Number.isInteger(topK) || topK < 1 || topK > MAX_TOP_K || ids === "invalid" || typeof strictMode !== "boolean") {
     res.status(400).json({ error: `设置格式不正确（资料条数需为 1 到 ${MAX_TOP_K}）` });
     return;
   }
@@ -22,6 +23,6 @@ settingsRouter.put("/", async (req, res) => {
     res.status(404).json({ error: "知识库不存在" });
     return;
   }
-  await saveSettings({ replyStyle: replyStyle as ReplyStyle, topK, defaultKnowledgeBaseIds: ids });
+  await saveSettings({ replyStyle: replyStyle as ReplyStyle, topK, defaultKnowledgeBaseIds: ids, strictMode });
   res.json(await getSettings());
 });

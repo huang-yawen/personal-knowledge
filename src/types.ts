@@ -14,6 +14,9 @@ export type KnowledgeBase = {
   id: number;
   name: string;
   description: string;
+  // 未经“尚未添加描述”占位处理的原始值，编辑时使用
+  rawDescription: string;
+  instructions: string;
   documents: number;
   updated: string;
   cover: "blue" | "purple" | "orange" | "green";

@@ -20,6 +20,7 @@ import { dailyTokenQuota, userRateLimit } from "./modules/usage";
 import { statsRouter } from "./modules/usage/routes";
 import { settingsRouter } from "./modules/settings/routes";
 import { accountRouter } from "./modules/account/routes";
+import { adminRouter } from "./modules/admin/routes";
 
 const app = express();
 // 部署在本机 nginx 之后：信任回环代理，req.secure / req.ip 才能反映真实请求
@@ -82,6 +83,7 @@ app.use("/api/notes", noteRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/account", accountRouter);
+app.use("/api/admin", adminRouter);
 
 // 兜底错误处理：未预期的异常统一返回 JSON，细节只写日志
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -23,6 +23,9 @@ type ChatState = {
   // 切换或新建对话时递增，用来重建对话运行时；对话中途获得 id 不会改变它
   threadKey: number;
   initialMessages: ThreadMessageLike[];
+  // 从别处（如文档摘要里的推荐问题）带来的待提问内容，对话页读取后填入输入框并清空
+  pendingQuestion: string | null;
+  setPendingQuestion: (question: string | null) => void;
   setKnowledgeBaseIds: (ids: number[]) => void;
   setSources: (sources: ChatSource[]) => void;
   setConversationId: (id: number) => void;
@@ -36,6 +39,7 @@ type ChatState = {
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   knowledgeBaseIds: [],
+  pendingQuestion: null,
   sources: [],
   conversations: [],
   conversationQuery: "",
@@ -43,6 +47,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   conversationId: null,
   threadKey: 0,
   initialMessages: [],
+  setPendingQuestion: (pendingQuestion) => set({ pendingQuestion }),
   setKnowledgeBaseIds: (knowledgeBaseIds) => set({ knowledgeBaseIds }),
   setSources: (sources) => set({ sources }),
   setConversationId: (conversationId) => set({ conversationId }),

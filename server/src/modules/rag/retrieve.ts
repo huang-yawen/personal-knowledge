@@ -7,6 +7,7 @@ import { currentUserId } from "../auth/context";
 
 export type RetrievedChunk = {
   chunkId: number;
+  knowledgeBaseId: number;
   documentId: number;
   documentName: string;
   page: number | null;
@@ -57,7 +58,7 @@ export const retrieveChunks = async (
   if (hits.length === 0) return [];
 
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT c.id, c.document_id, c.content, c.page_number, d.original_name
+    `SELECT c.id, c.knowledge_base_id, c.document_id, c.content, c.page_number, d.original_name
      FROM document_chunks c JOIN documents d ON d.id = c.document_id
      WHERE c.id IN (?) AND c.user_id = ?`,
     [hits.map((hit) => hit.payload.chunk_id), currentUserId()],
@@ -69,6 +70,7 @@ export const retrieveChunks = async (
     return [
       {
         chunkId: row.id as number,
+        knowledgeBaseId: row.knowledge_base_id as number,
         documentId: row.document_id as number,
         documentName: row.original_name as string,
         page: row.page_number as number | null,

@@ -36,12 +36,14 @@ type DocumentRow = RowDataPacket & {
   status: string;
   errorMessage: string | null;
   sourceNoteId: number | null;
+  summary: string | null;
+  suggestedQuestions: string[] | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 const documentColumns = `id, knowledge_base_id AS knowledgeBaseId, original_name AS name, mime_type AS mimeType,
-  size_bytes AS sizeBytes, status, error_message AS errorMessage, source_note_id AS sourceNoteId, created_at AS createdAt, updated_at AS updatedAt`;
+  size_bytes AS sizeBytes, status, error_message AS errorMessage, source_note_id AS sourceNoteId, summary, suggested_questions AS suggestedQuestions, created_at AS createdAt, updated_at AS updatedAt`;
 
 const knowledgeBaseExists = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM knowledge_bases WHERE id = ? AND user_id = ?", [

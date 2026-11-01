@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, LibraryBig, Sparkles } from "lucide-react";
+import { useAui } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
@@ -56,12 +57,25 @@ export function ChatPage() {
       <div className="chat-workspace">
         <section className="chat-thread-shell" aria-label="AI 对话">
           <MyRuntimeProvider key={threadKey} initialMessages={initialMessages}>
+            <PendingQuestion />
             <Thread components={{ Welcome: ChatWelcome }} />
           </MyRuntimeProvider>
         </section>
       </div>
     </div>
   );
+}
+
+// 把从别处带来的问题（如文档摘要里的推荐问题）填进输入框；不自动发送，让用户确认后再发
+function PendingQuestion() {
+  const aui = useAui();
+  const pending = useChatStore((state) => state.pendingQuestion);
+  useEffect(() => {
+    if (pending === null) return;
+    aui.composer.setText(pending);
+    useChatStore.getState().setPendingQuestion(null);
+  }, [pending, aui]);
+  return null;
 }
 
 function ChatWelcome() {

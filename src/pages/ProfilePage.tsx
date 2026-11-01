@@ -355,6 +355,13 @@ function AiSettings() {
               ))}
             </div>
           </div>
+          <div className="setting-row">
+            <div>
+              <strong>严格模式</strong>
+              <p>只依据知识库资料回答；资料不足时直接说明，不使用模型自身知识。</p>
+            </div>
+            <Toggle checked={settings.strictMode} onChange={(on) => void update({ ...settings, strictMode: on })} />
+          </div>
           <SettingsSelect
             label="每次回答引用的资料条数"
             value={`${settings.topK} 条`}
