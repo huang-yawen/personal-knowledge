@@ -12,7 +12,21 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
-import { createNote, deleteNote, getNote, listNotes, updateNote, type NoteDto, type NoteListItemDto } from "@/lib/api";
+import { useChatStore } from "@/lib/chat-store";
+import { useNoteNavStore } from "@/lib/note-nav-store";
+import { useReaderStore } from "@/lib/reader-store";
+import {
+  createNote,
+  deleteNote,
+  getNote,
+  listNotes,
+  listNoteTags,
+  updateNote,
+  type NoteDto,
+  type NoteListItemDto,
+  type NotePatch,
+  type NoteSourceDto,
+} from "@/lib/api";
 
 const AUTOSAVE_DELAY_MS = 800;
 
@@ -26,7 +40,7 @@ const formatTime = (iso: string) => {
 
 const toListItem = (note: NoteDto): NoteListItemDto => ({ ...note, preview: note.content.slice(0, 200) });
 
-export function NotesPage() {
+export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void }) {
   const [notes, setNotes] = useState<NoteListItemDto[]>([]);
   const [current, setCurrent] = useState<NoteDto | null>(null);
   const [query, setQuery] = useState("");
@@ -35,10 +49,21 @@ export function NotesPage() {
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [error, setError] = useState<string | null>(null);
+  // 标签筛选：tagOptions 为全部标签及数量，tagFilter 为当前筛选的标签（空表示不筛选）
+  const [tagOptions, setTagOptions] = useState<{ tag: string; count: number }[]>([]);
+  const [tagFilter, setTagFilter] = useState("");
+  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
   // 待保存的改动与保存队列：队列保证同一笔记的保存请求按顺序发出，不会被慢请求反超
-  const pending = useRef<{ id: number; title?: string; content?: string } | null>(null);
+  const pending = useRef<({ id: number } & NotePatch) | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
+
+  const refreshTagOptions = useCallback(() => {
+    listNoteTags().then(setTagOptions).catch(console.error);
+  }, []);
+
+  useEffect(refreshTagOptions, [refreshTagOptions]);
 
   const flush = useCallback((): Promise<void> => {
     window.clearTimeout(timer.current);
@@ -47,8 +72,10 @@ export function NotesPage() {
     pending.current = null;
     queue.current = queue.current.then(async () => {
       try {
-        const saved = await updateNote(job.id, { title: job.title, content: job.content });
+        const { id, ...patch } = job;
+        const saved = await updateNote(id, patch);
         setNotes((items) => [toListItem(saved), ...items.filter((item) => item.id !== saved.id)]);
+        if (patch.tags) refreshTagOptions();
         setSaveState(pending.current ? "saving" : "saved");
       } catch {
         // 失败时把改动放回待保存，下次编辑或切换时会重试
@@ -57,7 +84,7 @@ export function NotesPage() {
       }
     });
     return queue.current;
-  }, []);
+  }, [refreshTagOptions]);
 
   // 离开页面时把未保存的改动发出去
   useEffect(() => () => void flush(), [flush]);
@@ -65,7 +92,7 @@ export function NotesPage() {
   // 搜索词停顿 250ms 后再请求；首次进入时也走这里加载列表
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      listNotes(query)
+      listNotes(query, tagFilter)
         .then((items) => {
           setNotes(items);
           setError(null);
@@ -73,17 +100,38 @@ export function NotesPage() {
         .catch((reason: Error) => setError(reason.message));
     }, query ? 250 : 0);
     return () => window.clearTimeout(handle);
-  }, [query]);
+  }, [query, tagFilter]);
 
-  const edit = (patch: { title?: string; content?: string }) => {
+  const edit = (patch: NotePatch) => {
     if (!current) return;
     setCurrent({ ...current, ...patch });
-    // 标题被清空时先只改界面，不提交空标题（失焦时会补回默认标题）
-    const { title, ...rest } = patch;
-    pending.current = { ...pending.current, id: current.id, ...rest, ...(title?.trim() ? { title } : {}) };
+    // 标题、分类被清空时先只改界面，不提交空值（失焦时会补回默认值）
+    const { title, category, ...rest } = patch;
+    pending.current = {
+      ...pending.current,
+      id: current.id,
+      ...rest,
+      ...(title?.trim() ? { title } : {}),
+      ...(category?.trim() ? { category } : {}),
+    };
     setSaveState("saving");
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void flush(), AUTOSAVE_DELAY_MS);
+  };
+
+  const addTag = () => {
+    const tag = tagDraft.trim();
+    setTagDraft("");
+    if (current && tag && !current.tags.includes(tag) && current.tags.length < 10) edit({ tags: [...current.tags, tag] });
+  };
+
+  // 来源跳转：文档打开阅读抽屉并定位片段，对话则切到 AI 对话页并打开
+  const openSource = (source: NoteSourceDto) => {
+    if (source.type === "document") {
+      useReaderStore.getState().open(source.refId, source.chunkId ?? undefined);
+      return;
+    }
+    useChatStore.getState().openConversation(source.refId).then(() => onNavigate("AI 对话")).catch((reason: Error) => setError(reason.message));
   };
 
   const selectNote = async (id: number) => {
@@ -96,6 +144,15 @@ export function NotesPage() {
       setError((reason as Error).message);
     }
   };
+
+  // 别处（阅读抽屉、对话菜单）请求打开某篇笔记时，读取并清空请求后选中它
+  const pendingNoteId = useNoteNavStore((state) => state.pendingNoteId);
+  useEffect(() => {
+    if (pendingNoteId === null) return;
+    useNoteNavStore.getState().consume();
+    void selectNote(pendingNoteId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectNote 每次渲染都会重建，只在请求变化时触发
+  }, [pendingNoteId]);
 
   const newNote = async () => {
     await flush();
@@ -160,11 +217,29 @@ export function NotesPage() {
           </div>
           <div className="notes-filter-row">
             <span>
-              {query ? "搜索结果" : "全部笔记"} <b>{notes.length}</b>
+              {query || tagFilter ? "筛选结果" : "全部笔记"} <b>{notes.length}</b>
             </span>
-            <button type="button">
-              <Tag size={14} /> 标签
-            </button>
+            <div className="notes-tag-filter">
+              <button type="button" aria-haspopup="menu" onClick={() => setIsTagMenuOpen((open) => !open)}>
+                <Tag size={14} /> {tagFilter ? `#${tagFilter}` : "标签"}
+              </button>
+              {isTagMenuOpen && (
+                <>
+                  <button className="menu-backdrop" type="button" aria-label="关闭菜单" onClick={() => setIsTagMenuOpen(false)} />
+                  <div className="conversation-menu" role="menu">
+                    <button type="button" role="menuitem" onClick={() => { setTagFilter(""); setIsTagMenuOpen(false); }}>
+                      全部标签
+                    </button>
+                    {tagOptions.map((option) => (
+                      <button type="button" role="menuitem" key={option.tag} onClick={() => { setTagFilter(option.tag); setIsTagMenuOpen(false); }}>
+                        #{option.tag} <small>{option.count}</small>
+                      </button>
+                    ))}
+                    {tagOptions.length === 0 && <small className="notes-tag-empty">还没有标签</small>}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
           <div className="notes-list">
             {notes.map((note) => (
@@ -189,7 +264,7 @@ export function NotesPage() {
             ))}
           </div>
           {notes.length === 0 && !error && (
-            <div className="notes-no-result">{query ? "没有找到匹配的笔记" : "还没有笔记，点击右上角新建"}</div>
+            <div className="notes-no-result">{query || tagFilter ? "没有找到匹配的笔记" : "还没有笔记，点击右上角新建"}</div>
           )}
           {error && <div className="notes-no-result">{error}</div>}
         </aside>
@@ -209,9 +284,42 @@ export function NotesPage() {
                 onBlur={() => !current.title.trim() && edit({ title: "未命名笔记" })}
               />
               <p>
-                <span>{current.category}</span> ·{" "}
                 {saveState === "saving" ? "保存中…" : saveState === "error" ? "保存失败，将自动重试" : `已保存 · ${formatTime(notes.find((item) => item.id === current.id)?.updatedAt ?? current.updatedAt)}`}
               </p>
+              <div className="note-meta">
+                <input
+                  className="note-category-input"
+                  value={current.category}
+                  maxLength={50}
+                  aria-label="分类"
+                  onChange={(event) => edit({ category: event.target.value })}
+                  onBlur={() => !current.category.trim() && edit({ category: "未分类" })}
+                />
+                {current.tags.map((tag) => (
+                  <span className="note-tag" key={tag}>
+                    #{tag}
+                    <button type="button" aria-label={`移除标签 ${tag}`} onClick={() => edit({ tags: current.tags.filter((item) => item !== tag) })}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  className="note-tag-input"
+                  value={tagDraft}
+                  maxLength={20}
+                  placeholder="添加标签"
+                  aria-label="添加标签"
+                  onChange={(event) => setTagDraft(event.target.value)}
+                  onBlur={addTag}
+                  onKeyDown={(event) => {
+                    // 输入法选词时的回车不算提交
+                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      addTag();
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div className="editor-actions">
               <button
@@ -267,6 +375,24 @@ export function NotesPage() {
               onChange={(event) => edit({ content: event.target.value })}
               spellCheck
             />
+          )}
+          {current.sources.length > 0 && (
+            <footer className="note-sources">
+              <small>来源</small>
+              {current.sources.map((source) => (
+                <button
+                  className="source-chip"
+                  type="button"
+                  key={source.id}
+                  disabled={!source.available}
+                  title={source.available ? (source.type === "document" ? "打开文档" : "打开对话") : "原资源已被删除"}
+                  onClick={() => openSource(source)}
+                >
+                  <b>{source.type === "document" ? "文" : "话"}</b>
+                  <span>{source.label}</span>
+                </button>
+              ))}
+            </footer>
           )}
             </>
           )}

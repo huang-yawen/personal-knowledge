@@ -162,21 +162,34 @@ export type NoteListItemDto = {
   title: string;
   preview: string;
   category: string;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 };
 
-export type NoteDto = Omit<NoteListItemDto, "preview"> & { content: string };
+export type NoteSourceInput = { type: "document" | "conversation"; refId: number; chunkId?: number; label: string };
 
-export const listNotes = (query = "") =>
-  request<NoteListItemDto[]>(`/notes?${new URLSearchParams(query ? { q: query } : {})}`);
+// available 为 false 表示来源资源已被删除，只保留名称
+export type NoteSourceDto = Omit<NoteSourceInput, "chunkId"> & { id: number; chunkId: number | null; available: boolean };
+
+export type NoteDto = Omit<NoteListItemDto, "preview"> & { content: string; sources: NoteSourceDto[] };
+
+export const listNotes = (query = "", tag = "") =>
+  request<NoteListItemDto[]>(`/notes?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(tag ? { tag } : {}) })}`);
+
+export const listNotesBySource = (type: "document" | "conversation", refId: number) =>
+  request<NoteListItemDto[]>(`/notes?${new URLSearchParams({ sourceType: type, refId: String(refId) })}`);
+
+export const listNoteTags = () => request<{ tag: string; count: number }[]>("/notes/tags");
 
 export const getNote = (id: number) => request<NoteDto>(`/notes/${id}`);
 
-export const createNote = (input: { title?: string; content?: string } = {}) =>
+export const createNote = (input: { title?: string; content?: string; sources?: NoteSourceInput[] } = {}) =>
   request<NoteDto>("/notes", { method: "POST", body: JSON.stringify(input) });
 
-export const updateNote = (id: number, patch: { title?: string; content?: string }) =>
+export type NotePatch = { title?: string; content?: string; category?: string; tags?: string[] };
+
+export const updateNote = (id: number, patch: NotePatch) =>
   request<NoteDto>(`/notes/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
 export const deleteNote = (id: number) => request<void>(`/notes/${id}`, { method: "DELETE" });

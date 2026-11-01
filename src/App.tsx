@@ -10,6 +10,8 @@ import { NotesPage } from "@/pages/NotesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ConversationList } from "@/components/ConversationList";
+import { useNoteNavStore } from "@/lib/note-nav-store";
+import { useReaderStore } from "@/lib/reader-store";
 
 type NavItem = {
   label: string;
@@ -36,6 +38,14 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
+
+  // 从阅读抽屉或对话菜单跳到笔记页并选中某篇笔记
+  const openNote = (id: number) => {
+    useNoteNavStore.getState().request(id);
+    useReaderStore.getState().close();
+    setActiveNav("我的笔记");
+    setIsSidebarOpen(false);
+  };
 
   const changeTheme = (dark: boolean) => {
     setIsDark(dark);
@@ -80,7 +90,7 @@ function App() {
           ))}
         </nav>
 
-        {activeNav === "AI 对话" && <ConversationList onPick={() => setIsSidebarOpen(false)} />}
+        {activeNav === "AI 对话" && <ConversationList onPick={() => setIsSidebarOpen(false)} onOpenNote={openNote} />}
 
         <div className="sidebar-bottom">
           <button className="nav-item" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => changeTheme(!isDark)}>
@@ -103,7 +113,7 @@ function App() {
 
       <main className="main-content">
         {isBleed ? (
-          <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : <NotesPage />}</div>
+          <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : <NotesPage onNavigate={setActiveNav} />}</div>
         ) : (
           <div className="page-scroll">
             {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : <PlaceholderPage page={activeNav} />}
@@ -111,7 +121,7 @@ function App() {
         )}
       </main>
 
-      <DocumentReader />
+      <DocumentReader onOpenNote={openNote} />
 
       <button className="sidebar-toggle" type="button" aria-label="折叠侧边栏" onClick={() => setIsCollapsed((value) => !value)}>
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

@@ -26,6 +26,7 @@ import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-ic
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageFollowups } from "@/components/MessageFollowups";
+import { MessageSaveNote } from "@/components/MessageSaveNote";
 import { MessageSources } from "@/components/MessageSources";
 import { cn } from "@/lib/utils";
 import {
@@ -670,6 +671,7 @@ const AssistantMessage: FC = () => {
         </MessagePrimitive.GroupedParts>
         <MessageError />
         <MessageSources />
+        <MessageSaveNote />
         <MessageFollowups />
       </div>
 

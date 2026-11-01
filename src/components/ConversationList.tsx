@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Archive, FileText, MessageSquarePlus, MoreHorizontal, Pencil, Search, Star, Trash2 } from "lucide-react";
 import { summarizeConversation, type ConversationDto } from "@/lib/api";
+import { RelatedNotes } from "@/components/RelatedNotes";
 import { useChatStore } from "@/lib/chat-store";
 
 // 按更新日期把对话分成 今天 / 昨天 / 更早
@@ -11,7 +12,7 @@ const dayGroup = (iso: string) => {
 };
 
 // 侧边栏里的对话历史（仿 ChatGPT），只在 AI 对话页显示
-export function ConversationList({ onPick }: { onPick: () => void }) {
+export function ConversationList({ onPick, onOpenNote }: { onPick: () => void; onOpenNote: (noteId: number) => void }) {
   const {
     conversations,
     conversationId,
@@ -109,6 +110,7 @@ export function ConversationList({ onPick }: { onPick: () => void }) {
                   <button className="menu-backdrop" type="button" aria-label="关闭菜单" onClick={() => setMenuId(null)} />
                   <div className="conversation-menu" role="menu">
                     <button type="button" role="menuitem" onClick={() => act(() => rename(item))}><Pencil size={14} /> 重命名</button>
+                    <RelatedNotes type="conversation" refId={item.id} onOpen={(noteId) => act(() => onOpenNote(noteId))} />
                     <button type="button" role="menuitem" onClick={() => act(() => summarize(item))}><FileText size={14} /> 生成总结</button>
                     <button type="button" role="menuitem" onClick={() => act(() => run(patchConversation(item.id, { isFavorite: !item.isFavorite })))}>
                       <Star size={14} /> {item.isFavorite ? "取消收藏" : "收藏"}

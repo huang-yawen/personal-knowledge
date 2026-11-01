@@ -247,3 +247,41 @@
 .summary-actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
 .summary-actions button { height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 16px; background: transparent; color: var(--text); font-size: 13px; cursor: pointer; }
 .summary-actions button:hover { background: var(--hover); }
+
+/* 回答下方的“保存为笔记” */
+.message-save { margin-top: 10px; }
+.message-save button { height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.message-save button:hover:not(:disabled) { background: var(--hover); }
+.message-save button:disabled { color: var(--muted); cursor: default; }
+
+/* 笔记：分类、标签与标签筛选 */
+.notes-filter-row { display: flex; align-items: center; justify-content: space-between; }
+.notes-tag-filter { position: relative; }
+.notes-tag-filter .conversation-menu { right: 0; max-height: 280px; overflow-y: auto; }
+.notes-tag-filter .conversation-menu small { margin-left: auto; color: var(--muted); }
+.notes-tag-empty { padding: 8px 10px; }
+.note-meta { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.note-category-input, .note-tag-input { height: 24px; padding: 0 8px; border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--text); font-size: 12px; outline: none; }
+.note-category-input { width: 96px; background: var(--hover); }
+.note-tag-input { width: 84px; }
+.note-tag-input:focus, .note-category-input:focus { border-color: var(--line); }
+.note-tag { height: 24px; padding: 0 4px 0 9px; display: inline-flex; align-items: center; gap: 2px; border-radius: 12px; background: var(--blue-soft); color: var(--blue); font-size: 12px; }
+.note-tag button { width: 18px; height: 18px; border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+.note-tag button:hover { background: var(--hover); }
+
+/* 笔记底部的来源 */
+.note-sources { padding: 10px 24px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.note-sources > small { margin-right: 2px; color: var(--muted); font-size: 12px; }
+.note-sources .source-chip:disabled { color: var(--muted); cursor: default; }
+.note-sources .source-chip:disabled span { text-decoration: line-through; }
+
+/* 相关笔记（阅读抽屉、对话菜单） */
+.related-notes { padding: 8px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); }
+.related-notes > small { margin-right: 2px; color: var(--muted); font-size: 12px; }
+.related-notes button { max-width: 200px; height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 13px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.related-notes button:hover { background: var(--hover); }
+.related-notes button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 在对话菜单里改为竖排的菜单项 */
+.conversation-menu .related-notes { padding: 4px 0; display: grid; gap: 0; border-bottom: 1px solid var(--line); }
+.conversation-menu .related-notes > small { padding: 2px 10px; }
+.conversation-menu .related-notes button { max-width: none; height: 34px; padding: 0 10px; gap: 8px; border: 0; border-radius: 8px; font-size: 13px; }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { getDocumentChunks, type DocumentChunkDto, type DocumentDto } from "@/lib/api";
+import { RelatedNotes } from "@/components/RelatedNotes";
 import { useReaderStore } from "@/lib/reader-store";
 
 type Loaded = { document: DocumentDto; chunks: DocumentChunkDto[] };
@@ -8,7 +9,7 @@ type Loaded = { document: DocumentDto; chunks: DocumentChunkDto[] };
 type Result = { id: number; data?: Loaded; error?: string };
 
 // 文档阅读抽屉：按分块展示解析后的原文，从引用打开时滚动到对应分块并高亮
-export function DocumentReader() {
+export function DocumentReader({ onOpenNote }: { onOpenNote: (noteId: number) => void }) {
   const { documentId, chunkId, close } = useReaderStore();
   const [result, setResult] = useState<Result | null>(null);
   const targetRef = useRef<HTMLElement | null>(null);
@@ -52,6 +53,7 @@ export function DocumentReader() {
           </div>
           <button type="button" aria-label="关闭" onClick={close}><X size={18} /></button>
         </header>
+        <RelatedNotes type="document" refId={documentId} onOpen={onOpenNote} />
         <div className="reader-body">
           {error && <p className="form-error" role="alert">{error}</p>}
           {loaded && loaded.chunks.length === 0 && <p className="reader-empty">该文档还没有可阅读的内容（可能仍在处理中或处理失败）。</p>}
