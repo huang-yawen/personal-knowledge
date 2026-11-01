@@ -11,6 +11,7 @@ import {
   type OverviewDto,
 } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
+import { useAuthStore } from "@/lib/auth-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
 
@@ -49,6 +50,7 @@ const groupByMonth = (items: ActivityDto[]) => {
 };
 
 export function Dashboard({ onNavigate }: DashboardProps) {
+  const displayName = useAuthStore((state) => state.user?.displayName ?? "");
   const [overview, setOverview] = useState<OverviewDto | null>(null);
   const [conversations, setConversations] = useState<ConversationDto[]>([]);
   const [activities, setActivities] = useState<ActivityDto[]>([]);
@@ -111,7 +113,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return (
     <div className="overview">
-      <h1 className="home-title">{greeting()}，Lenovo</h1>
+      <h1 className="home-title">{greeting()}，{displayName}</h1>
       <p className="home-sub">让每一次阅读，成为可检索的长期记忆。</p>
       {error && <p className="form-error overview-error" role="alert">{error}</p>}
 

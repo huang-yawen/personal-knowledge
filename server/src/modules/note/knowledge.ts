@@ -6,6 +6,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { removeDocument } from "../document/remove";
 import { enqueue } from "../worker/queue";
+import { currentUserId } from "../auth/context";
 
 // 带 HTTP 状态码的业务错误，路由层直接转成响应
 export class NoteKnowledgeError extends Error {
@@ -25,7 +26,7 @@ export const getNoteKnowledgeBase = async (note: { id: number; title: string; co
             d.status, d.error_message AS errorMessage, d.source_note_hash AS hash
      FROM documents d JOIN knowledge_bases kb ON kb.id = d.knowledge_base_id
      WHERE d.source_note_id = ? AND d.user_id = ? LIMIT 1`,
-    [note.id, config.devUserId],
+    [note.id, currentUserId()],
   );
   if (!rows[0]) return null;
   const { hash, ...rest } = rows[0];
@@ -37,7 +38,7 @@ export const getNoteKnowledgeBase = async (note: { id: number; title: string; co
 export const addNoteToKnowledgeBase = async (noteId: number, knowledgeBaseId: number) => {
   const [notes] = await pool.query<RowDataPacket[]>("SELECT title, content FROM notes WHERE id = ? AND user_id = ?", [
     noteId,
-    config.devUserId,
+    currentUserId(),
   ]);
   if (!notes[0]) throw new NoteKnowledgeError(404, "笔记不存在");
   const title = notes[0].title as string;
@@ -46,7 +47,7 @@ export const addNoteToKnowledgeBase = async (noteId: number, knowledgeBaseId: nu
 
   const [kbs] = await pool.query<RowDataPacket[]>("SELECT id FROM knowledge_bases WHERE id = ? AND user_id = ?", [
     knowledgeBaseId,
-    config.devUserId,
+    currentUserId(),
   ]);
   if (kbs.length === 0) throw new NoteKnowledgeError(404, "知识库不存在");
 
@@ -54,7 +55,7 @@ export const addNoteToKnowledgeBase = async (noteId: number, knowledgeBaseId: nu
   const body = `# ${title}\n\n${content}\n`;
   const [existing] = await pool.query<RowDataPacket[]>(
     "SELECT id, knowledge_base_id, stored_path FROM documents WHERE source_note_id = ? AND user_id = ?",
-    [noteId, config.devUserId],
+    [noteId, currentUserId()],
   );
   const old = existing[0];
 
@@ -77,7 +78,7 @@ export const addNoteToKnowledgeBase = async (noteId: number, knowledgeBaseId: nu
     throw new NoteKnowledgeError(409, `每个知识库最多 ${config.maxDocsPerKnowledgeBase} 个文件`);
   }
 
-  const dir = path.join(config.uploadDir, String(config.devUserId), String(knowledgeBaseId));
+  const dir = path.join(config.uploadDir, String(currentUserId()), String(knowledgeBaseId));
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, `${randomUUID()}.md`);
   await writeFile(file, body);
@@ -85,7 +86,7 @@ export const addNoteToKnowledgeBase = async (noteId: number, knowledgeBaseId: nu
     `INSERT INTO documents (user_id, knowledge_base_id, original_name, stored_path, mime_type, size_bytes, source_note_id, source_note_hash)
      VALUES (?, ?, ?, ?, 'text/markdown', ?, ?, ?)`,
     [
-      config.devUserId,
+      currentUserId(),
       knowledgeBaseId,
       title,
       path.relative(config.uploadDir, file),
@@ -101,7 +102,7 @@ export const addNoteToKnowledgeBase = async (noteId: number, knowledgeBaseId: nu
 export const removeNoteFromKnowledgeBase = async (noteId: number) => {
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM documents WHERE source_note_id = ? AND user_id = ?", [
     noteId,
-    config.devUserId,
+    currentUserId(),
   ]);
   if (rows[0]) await removeDocument(rows[0].id as number);
 };

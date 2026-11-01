@@ -13,6 +13,8 @@ import { ragRouter } from "./modules/rag/routes";
 import { activityRouter } from "./modules/activity/routes";
 import { knowledgeBaseRouter } from "./modules/knowledge-base/routes";
 import { noteRouter } from "./modules/note/routes";
+import { authRouter } from "./modules/auth/routes";
+import { requireAuth, sameOriginOnly } from "./modules/auth/middleware";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -26,6 +28,11 @@ app.get("/api/health", async (_req, res) => {
     res.status(503).json({ status: "degraded", db: "down" });
   }
 });
+
+// 账户接口无需登录；其余 /api 接口都必须先登录，写操作还要求来自本站
+app.use("/api", sameOriginOnly);
+app.use("/api/auth", authRouter);
+app.use("/api", requireAuth);
 
 app.use("/api/knowledge-bases", knowledgeBaseRouter);
 app.use("/api", documentRouter);

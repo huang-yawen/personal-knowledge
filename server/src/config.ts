@@ -29,8 +29,8 @@ export const config = {
   uploadDir: path.resolve(import.meta.dirname, "..", "uploads"),
   maxFileBytes: 20 * 1024 * 1024,
   maxDocsPerKnowledgeBase: 100,
-  // 目前只有单用户，所有数据归属这个固定的开发用户
-  devUserId: Number(process.env.DEV_USER_ID ?? 1),
+  // 账户系统接入前的固定用户 id：第一个注册的账号沿用这个 id，从而自动接管已有数据
+  legacyUserId: Number(process.env.DEV_USER_ID ?? 1),
   mysql: {
     host: process.env.MYSQL_HOST ?? "127.0.0.1",
     port: Number(process.env.MYSQL_PORT ?? 3306),

@@ -6,6 +6,7 @@ import { recordActivity } from "../activity/repository";
 import { addNoteToKnowledgeBase, getNoteKnowledgeBase, NoteKnowledgeError, removeNoteFromKnowledgeBase } from "./knowledge";
 import { parseId } from "../knowledge-base/routes";
 import { describeRetrievalError, ownsKnowledgeBases, parseIdList, retrieveChunks } from "../rag/retrieve";
+import { currentUserId } from "../auth/context";
 
 const MAX_TITLE_CHARS = 100;
 const MAX_CONTENT_CHARS = 200_000;
@@ -51,7 +52,7 @@ const parseSources = (value: unknown): SourceInput[] | undefined => {
 const fetchNote = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT ${detailColumns} FROM notes WHERE id = ? AND user_id = ?`,
-    [id, config.devUserId],
+    [id, currentUserId()],
   );
   if (!rows[0]) return undefined;
   const [sources] = await pool.query<RowDataPacket[]>(
@@ -61,7 +62,7 @@ const fetchNote = async (id: number) => {
          ELSE EXISTS (SELECT 1 FROM conversations c WHERE c.id = s.ref_id AND c.user_id = ?)
        END AS available
      FROM note_sources s WHERE s.note_id = ? ORDER BY s.id`,
-    [config.devUserId, config.devUserId, id],
+    [currentUserId(), currentUserId(), id],
   );
   const note = toDto(rows[0]);
   return {
@@ -78,7 +79,7 @@ noteRouter.get("/", async (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const tag = typeof req.query.tag === "string" ? req.query.tag.trim() : "";
   const conditions = ["user_id = ?"];
-  const params: (number | string)[] = [config.devUserId];
+  const params: (number | string)[] = [currentUserId()];
   if (q) {
     // 转义 LIKE 通配符，让用户输入的 % 和 _ 按字面匹配
     const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
@@ -108,7 +109,7 @@ noteRouter.get("/tags", async (_req, res) => {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT t.tag, COUNT(*) AS count FROM note_tags t JOIN notes n ON n.id = t.note_id
      WHERE n.user_id = ? GROUP BY t.tag ORDER BY count DESC, t.tag`,
-    [config.devUserId],
+    [currentUserId()],
   );
   res.json(rows);
 });
@@ -279,7 +280,7 @@ noteRouter.post("/", async (req, res) => {
   if (sources.length > 0) {
     const [existing] = await pool.query<RowDataPacket[]>(
       "SELECT id FROM notes WHERE user_id = ? AND title = ? AND content = ? LIMIT 1",
-      [config.devUserId, title, content],
+      [currentUserId(), title, content],
     );
     if (existing[0]) {
       res.json(await fetchNote(existing[0].id as number));
@@ -291,7 +292,7 @@ noteRouter.post("/", async (req, res) => {
   try {
     await conn.beginTransaction();
     const [result] = await conn.query<ResultSetHeader>("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)", [
-      config.devUserId,
+      currentUserId(),
       title,
       content,
     ]);
@@ -309,7 +310,7 @@ noteRouter.post("/", async (req, res) => {
     conn.release();
   }
   // 手动新建的空白笔记不记入轨迹；带内容或来源的（保存回答、摘录、AI 生成）才记
-  if (sources.length > 0 || content) await recordActivity(config.devUserId, "note_created", title, noteId);
+  if (sources.length > 0 || content) await recordActivity(currentUserId(), "note_created", title, noteId);
   res.status(201).json(await fetchNote(noteId));
 });
 
@@ -365,7 +366,7 @@ noteRouter.patch("/:id", async (req, res) => {
       ? await conn.query<ResultSetHeader>(`UPDATE notes SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`, [
           ...params,
           id,
-          config.devUserId,
+          currentUserId(),
         ])
       : [undefined];
     found = Boolean(id && result && result.affectedRows > 0);
@@ -423,7 +424,7 @@ noteRouter.delete("/:id", async (req, res) => {
   // 先清理知识库里对应的文档、文件和向量，避免留下孤立数据
   if (id) await removeNoteFromKnowledgeBase(id);
   const [result] = id
-    ? await pool.query<ResultSetHeader>("DELETE FROM notes WHERE id = ? AND user_id = ?", [id, config.devUserId])
+    ? await pool.query<ResultSetHeader>("DELETE FROM notes WHERE id = ? AND user_id = ?", [id, currentUserId()])
     : [undefined];
   if (!result || result.affectedRows === 0) {
     res.status(404).json({ error: "笔记不存在" });

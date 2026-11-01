@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useState, type ComponentType, type FormEvent } from "react";
 import {
   BarChart3,
   Settings2,
@@ -7,6 +7,8 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
+import { changePassword, updateDisplayName } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 
 export function ProfilePage({
   isDark,
@@ -18,11 +20,6 @@ export function ProfilePage({
   const [activeSection, setActiveSection] = useState<
     "profile" | "ai" | "system" | "usage"
   >("profile");
-  const [profile, setProfile] = useState({
-    name: "Lenovo",
-    bio: "持续学习，持续构建。",
-    email: "lenovo@example.com",
-  });
   const [model, setModel] = useState("DeepSeek Chat");
   const [replyStyle, setReplyStyle] = useState("平衡");
   const [defaultLibrary, setDefaultLibrary] = useState("全部知识库");
@@ -57,42 +54,7 @@ export function ProfilePage({
           ))}
         </aside>
         <section className="profile-content">
-          {activeSection === "profile" && (
-            <div className="settings-section">
-              <SettingsHeading
-                icon={UserRound}
-                title="个人资料"
-                description="这些信息会显示在你的个人知识空间中。"
-              />
-              <div className="profile-identity">
-                <span className="profile-avatar-large">L</span>
-                <div>
-                  <strong>{profile.name}</strong>
-                  <p>个人知识空间</p>
-                </div>
-                <button type="button">更换头像</button>
-              </div>
-              <SettingsInput
-                label="显示名称"
-                value={profile.name}
-                onChange={(value) => setProfile({ ...profile, name: value })}
-              />
-              <SettingsInput
-                label="个人简介"
-                value={profile.bio}
-                onChange={(value) => setProfile({ ...profile, bio: value })}
-              />
-              <SettingsInput
-                label="邮箱"
-                value={profile.email}
-                onChange={(value) => setProfile({ ...profile, email: value })}
-              />
-              <div className="settings-footer">
-                <span>更改会自动保存</span>
-                <button type="button">保存资料</button>
-              </div>
-            </div>
-          )}
+          {activeSection === "profile" && <AccountSection />}
           {activeSection === "ai" && (
             <div className="settings-section">
               <SettingsHeading
@@ -301,6 +263,83 @@ function UsageCard({
       <p>{label}</p>
       <strong>{value}</strong>
       <small>{detail}</small>
+    </div>
+  );
+}
+
+// 账号：用户名只读，可改显示名称和密码，可退出登录
+function AccountSection() {
+  const { user, setUser, signOut } = useAuthStore();
+  const [displayName, setDisplayName] = useState(user?.displayName ?? "");
+  const [passwords, setPasswords] = useState({ oldPassword: "", newPassword: "" });
+  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (task: () => Promise<string>) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      setMessage({ text: await task(), isError: false });
+    } catch (reason) {
+      setMessage({ text: (reason as Error).message, isError: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveName = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      setUser(await updateDisplayName(displayName));
+      return "显示名称已保存";
+    });
+  };
+
+  const savePassword = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      await changePassword(passwords.oldPassword, passwords.newPassword);
+      setPasswords({ oldPassword: "", newPassword: "" });
+      return "密码已修改，其他设备上的登录已失效";
+    });
+  };
+
+  return (
+    <div className="settings-section">
+      <SettingsHeading icon={UserRound} title="账号" description="管理你的登录信息。" />
+      <div className="profile-identity">
+        <span className="profile-avatar-large">{(user?.displayName ?? "?").slice(0, 1).toUpperCase()}</span>
+        <div>
+          <strong>{user?.displayName}</strong>
+          <p>@{user?.username}{user?.isAdmin ? " · 管理员" : ""}</p>
+        </div>
+      </div>
+      <form onSubmit={saveName}>
+        <SettingsInput label="显示名称" value={displayName} onChange={setDisplayName} />
+        <div className="settings-footer">
+          <span />
+          <button type="submit" disabled={busy || !displayName.trim() || displayName.trim() === user?.displayName}>保存名称</button>
+        </div>
+      </form>
+      <form onSubmit={savePassword}>
+        <label className="settings-input">
+          <span>旧密码</span>
+          <input type="password" autoComplete="current-password" value={passwords.oldPassword} onChange={(event) => setPasswords({ ...passwords, oldPassword: event.target.value })} />
+        </label>
+        <label className="settings-input">
+          <span>新密码（8 到 128 位）</span>
+          <input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={passwords.newPassword} onChange={(event) => setPasswords({ ...passwords, newPassword: event.target.value })} />
+        </label>
+        <div className="settings-footer">
+          <span />
+          <button type="submit" disabled={busy || !passwords.oldPassword || passwords.newPassword.length < 8}>修改密码</button>
+        </div>
+      </form>
+      {message && <p className={message.isError ? "form-error" : "account-message"} role="status">{message.text}</p>}
+      <div className="settings-footer">
+        <span />
+        <button type="button" onClick={() => void signOut()}>退出登录</button>
+      </div>
     </div>
   );
 }

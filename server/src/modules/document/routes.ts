@@ -10,6 +10,7 @@ import { parseId } from "../knowledge-base/routes";
 import { recordActivity } from "../activity/repository";
 import { removeDocument } from "./remove";
 import { enqueue } from "../worker/queue";
+import { currentUserId, type AuthedRequest } from "../auth/context";
 
 // 只信扩展名，MIME 由服务端按扩展名确定，不使用客户端传来的值
 const fileTypes: Record<string, { label: string; mime: string }> = {
@@ -45,7 +46,7 @@ const documentColumns = `id, knowledge_base_id AS knowledgeBaseId, original_name
 const knowledgeBaseExists = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM knowledge_bases WHERE id = ? AND user_id = ?", [
     id,
-    config.devUserId,
+    currentUserId(),
   ]);
   return rows.length > 0;
 };
@@ -54,7 +55,7 @@ const knowledgeBaseExists = async (id: number) => {
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
-      const dir = path.join(config.uploadDir, String(config.devUserId), String(req.params.id));
+      const dir = path.join(config.uploadDir, String((req as AuthedRequest).userId), String(req.params.id));
       mkdir(dir, { recursive: true }).then(
         () => cb(null, dir),
         (error: Error) => cb(error, dir),
@@ -88,7 +89,7 @@ documentRouter.get("/knowledge-bases/:id/documents", async (req, res) => {
   }
   const [rows] = await pool.query<DocumentRow[]>(
     `SELECT ${documentColumns} FROM documents WHERE knowledge_base_id = ? AND user_id = ? ORDER BY created_at DESC, id DESC`,
-    [kbId, config.devUserId],
+    [kbId, currentUserId()],
   );
   res.json(rows);
 });
@@ -152,7 +153,7 @@ documentRouter.post("/knowledge-bases/:id/documents", async (req, res) => {
       `INSERT INTO documents (user_id, knowledge_base_id, original_name, stored_path, mime_type, size_bytes)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        config.devUserId,
+        currentUserId(),
         kbId,
         originalName,
         path.relative(config.uploadDir, file.path),
@@ -163,7 +164,7 @@ documentRouter.post("/knowledge-bases/:id/documents", async (req, res) => {
     const [created] = await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ?`, [
       result.insertId,
     ]);
-    await recordActivity(config.devUserId, "doc_uploaded", originalName, result.insertId);
+    await recordActivity(currentUserId(), "doc_uploaded", originalName, result.insertId);
     enqueue(result.insertId);
     res.status(201).json(created[0]);
   } catch (error) {
@@ -188,7 +189,7 @@ documentRouter.get("/documents/:id/chunks", async (req, res) => {
   const [docs] = id
     ? await pool.query<DocumentRow[]>(`SELECT ${documentColumns} FROM documents WHERE id = ? AND user_id = ?`, [
         id,
-        config.devUserId,
+        currentUserId(),
       ])
     : [[]];
   if (!id || docs.length === 0) {
@@ -198,7 +199,7 @@ documentRouter.get("/documents/:id/chunks", async (req, res) => {
   const [chunks] = await pool.query<RowDataPacket[]>(
     `SELECT id, chunk_index AS chunkIndex, content, page_number AS page
      FROM document_chunks WHERE document_id = ? AND user_id = ? ORDER BY chunk_index`,
-    [id, config.devUserId],
+    [id, currentUserId()],
   );
   res.json({ document: docs[0], chunks });
 });
@@ -209,7 +210,7 @@ documentRouter.post("/documents/:id/retry", async (req, res) => {
   const [result] = id
     ? await pool.query<ResultSetHeader>(
         "UPDATE documents SET status = 'pending', error_message = NULL WHERE id = ? AND user_id = ? AND status = 'failed'",
-        [id, config.devUserId],
+        [id, currentUserId()],
       )
     : [undefined];
   if (!id || !result || result.affectedRows === 0) {
@@ -233,7 +234,7 @@ documentRouter.patch("/documents/:id", async (req, res) => {
   const [fromNote] = id
     ? await pool.query<RowDataPacket[]>("SELECT id FROM documents WHERE id = ? AND user_id = ? AND source_note_id IS NOT NULL", [
         id,
-        config.devUserId,
+        currentUserId(),
       ])
     : [[]];
   if (fromNote.length > 0) {
@@ -244,7 +245,7 @@ documentRouter.patch("/documents/:id", async (req, res) => {
     ? await pool.query<ResultSetHeader>("UPDATE documents SET original_name = ? WHERE id = ? AND user_id = ?", [
         name,
         id,
-        config.devUserId,
+        currentUserId(),
       ])
     : [undefined];
   if (!id || !result || result.affectedRows === 0) {

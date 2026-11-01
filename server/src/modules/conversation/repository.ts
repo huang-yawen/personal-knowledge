@@ -1,7 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { config } from "../../config";
 import { pool } from "../../db";
 import { recordActivity } from "../activity/repository";
+import { currentUserId } from "../auth/context";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -15,7 +15,7 @@ export const makeTitle = (text: string) => {
 export const conversationExists = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM conversations WHERE id = ? AND user_id = ?", [
     id,
-    config.devUserId,
+    currentUserId(),
   ]);
   return rows.length > 0;
 };
@@ -32,17 +32,17 @@ const replaceScope = async (conversationId: number, knowledgeBaseIds: number[]) 
 
 export const createConversation = async (title: string, knowledgeBaseIds: number[]) => {
   const [result] = await pool.query<ResultSetHeader>("INSERT INTO conversations (user_id, title) VALUES (?, ?)", [
-    config.devUserId,
+    currentUserId(),
     title,
   ]);
   await replaceScope(result.insertId, knowledgeBaseIds);
-  await recordActivity(config.devUserId, "conversation_started", title, result.insertId);
+  await recordActivity(currentUserId(), "conversation_started", title, result.insertId);
   return result.insertId;
 };
 
 // 更新提问范围并刷新更新时间
 export const touchConversation = async (id: number, knowledgeBaseIds: number[]) => {
-  await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", [id, config.devUserId]);
+  await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", [id, currentUserId()]);
   await replaceScope(id, knowledgeBaseIds);
 };
 
@@ -70,7 +70,7 @@ export const syncMessages = async (conversationId: number, incoming: ChatMessage
     }
     if (common < incoming.length) {
       await conn.query("INSERT INTO messages (user_id, conversation_id, role, content) VALUES ?", [
-        incoming.slice(common).map((message) => [config.devUserId, conversationId, message.role, message.content]),
+        incoming.slice(common).map((message) => [currentUserId(), conversationId, message.role, message.content]),
       ]);
     }
     await conn.commit();
@@ -85,7 +85,7 @@ export const syncMessages = async (conversationId: number, incoming: ChatMessage
 export const saveAssistantMessage = async (conversationId: number, content: string, citations: object[]) => {
   await pool.query(
     "INSERT INTO messages (user_id, conversation_id, role, content, citations) VALUES (?, ?, 'assistant', ?, ?)",
-    [config.devUserId, conversationId, content, JSON.stringify(citations)],
+    [currentUserId(), conversationId, content, JSON.stringify(citations)],
   );
   await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", [conversationId]);
 };

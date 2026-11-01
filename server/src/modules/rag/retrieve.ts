@@ -3,6 +3,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { embedTexts } from "./embedding";
 import { searchPoints } from "./qdrant";
+import { currentUserId } from "../auth/context";
 
 export type RetrievedChunk = {
   chunkId: number;
@@ -37,7 +38,7 @@ export const parseIdList = (value: unknown): number[] | "invalid" => {
 export const ownsKnowledgeBases = async (ids: number[]) => {
   if (ids.length === 0) return true;
   const [rows] = await pool.query<RowDataPacket[]>("SELECT id FROM knowledge_bases WHERE user_id = ? AND id IN (?)", [
-    config.devUserId,
+    currentUserId(),
     ids,
   ]);
   return rows.length === ids.length;
@@ -59,7 +60,7 @@ export const retrieveChunks = async (
     `SELECT c.id, c.document_id, c.content, c.page_number, d.original_name
      FROM document_chunks c JOIN documents d ON d.id = c.document_id
      WHERE c.id IN (?) AND c.user_id = ?`,
-    [hits.map((hit) => hit.payload.chunk_id), config.devUserId],
+    [hits.map((hit) => hit.payload.chunk_id), currentUserId()],
   );
   const byId = new Map(rows.map((row) => [row.id as number, row]));
   return hits.flatMap((hit) => {

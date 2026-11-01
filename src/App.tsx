@@ -10,6 +10,7 @@ import { NotesPage } from "@/pages/NotesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ConversationList } from "@/components/ConversationList";
+import { useAuthStore } from "@/lib/auth-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
 
@@ -34,6 +35,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("工作台");
+  const displayName = useAuthStore((state) => state.user?.displayName ?? "");
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -102,8 +104,8 @@ function App() {
             <span>设置</span>
           </button>
           <button className="profile-button" type="button">
-            <span className="avatar">L</span>
-            <span className="profile-copy"><strong>Lenovo</strong><small>个人空间</small></span>
+            <span className="avatar">{displayName.slice(0, 1).toUpperCase()}</span>
+            <span className="profile-copy"><strong>{displayName}</strong><small>个人空间</small></span>
             <MoreHorizontal size={18} />
           </button>
         </div>

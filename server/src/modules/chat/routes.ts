@@ -17,7 +17,7 @@ import {
   touchConversation,
   type ChatMessage,
 } from "../conversation/repository";
-import { buildSystemPrompt, NO_MATERIAL_REPLY } from "./prompt";
+import { buildSystemPrompt } from "./prompt";
 
 type Usage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 
@@ -123,11 +123,20 @@ const generateFollowups = async (question: string, answer: string, signal: Abort
   }
 };
 
+// 回答里引用的资料编号，支持 [1]、[1][2]、[1, 2] 这几种写法
+const citedIndexes = (answer: string) => {
+  const indexes = new Set<number>();
+  for (const match of answer.matchAll(/\[(\d+(?:\s*[,，、]\s*\d+)*)\]/g)) {
+    for (const part of match[1].split(/[,，、]/)) indexes.add(Number(part));
+  }
+  return indexes;
+};
+
 const writeEvent = (res: Response, event: object) => res.write(`data: ${JSON.stringify(event)}\n\n`);
 
 export const chatRouter = Router();
 
-// 事件依次为 sources（引用）→ delta（文字片段，多次）→ done；出错时发送 error
+// 事件依次为 conversation → delta（文字片段，多次）→ sources（回答里实际引用的来源）→ followups → done；出错时发送 error
 chatRouter.post("/", async (req, res) => {
   const body = (typeof req.body === "object" && req.body !== null ? req.body : {}) as Record<string, unknown>;
   const messages = parseMessages(body.messages);
@@ -186,8 +195,7 @@ chatRouter.post("/", async (req, res) => {
     retrievalMs = Date.now() - retrievalStartedAt;
     hits = chunks.length;
     topScore = chunks[0]?.score;
-    const sources = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
-    writeEvent(res, { type: "sources", sources });
+    const retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
 
     let answer = "";
     const onDelta = (text: string) => {
@@ -195,15 +203,16 @@ chatRouter.post("/", async (req, res) => {
       answer += text;
       writeEvent(res, { type: "delta", text });
     };
-    if (chunks.length === 0) {
-      onDelta(NO_MATERIAL_REPLY);
-    } else {
-      usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, controller.signal, onDelta);
-    }
+    // 没有检索到资料时也照常调用模型，由提示词引导它用自身知识回答
+    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, controller.signal, onDelta);
+    // 只展示回答里真正用 [编号] 引用到的来源；模型用自身知识回答时没有来源
+    const cited = citedIndexes(answer);
+    const sources = retrieved.filter((source) => cited.has(source.index));
+    writeEvent(res, { type: "sources", sources });
     // 回答完整结束后才保存；中途停止的不入库，下次发送时界面历史会带上它
     if (answer) await saveAssistantMessage(activeConversationId, answer, sources);
-    // 有资料可答时才生成追问建议；建议不入库，仅随本次回答展示
-    if (chunks.length > 0 && answer && !controller.signal.aborted) {
+    // 追问建议不入库，仅随本次回答展示
+    if (answer && !controller.signal.aborted) {
       const followupStartedAt = Date.now();
       const followups = await generateFollowups(question, answer, controller.signal);
       followupMs = Date.now() - followupStartedAt;

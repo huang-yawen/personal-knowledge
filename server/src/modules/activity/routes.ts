@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { RowDataPacket } from "mysql2";
-import { config } from "../../config";
 import { pool } from "../../db";
+import { currentUserId } from "../auth/context";
 
 export const activityRouter = Router();
 
@@ -13,14 +13,14 @@ activityRouter.get("/activities", async (req, res) => {
     `SELECT id, type, title, ref_id AS refId, created_at AS createdAt
      FROM activities WHERE user_id = ? ${Number.isInteger(before) && before > 0 ? "AND id < ?" : ""}
      ORDER BY id DESC LIMIT ?`,
-    Number.isInteger(before) && before > 0 ? [config.devUserId, before, limit] : [config.devUserId, limit],
+    Number.isInteger(before) && before > 0 ? [currentUserId(), before, limit] : [currentUserId(), limit],
   );
   res.json(rows);
 });
 
 // 工作台总览：各类数量，以及需要处理（失败或仍在处理中）的文档
 activityRouter.get("/overview", async (_req, res) => {
-  const userId = config.devUserId;
+  const userId = currentUserId();
   const [counts] = await pool.query<RowDataPacket[]>(
     `SELECT (SELECT COUNT(*) FROM knowledge_bases WHERE user_id = ?) AS knowledgeBases,
             (SELECT COUNT(*) FROM documents WHERE user_id = ?) AS documents,

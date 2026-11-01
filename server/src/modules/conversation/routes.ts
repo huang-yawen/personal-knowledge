@@ -3,6 +3,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
 import { parseId } from "../knowledge-base/routes";
+import { currentUserId } from "../auth/context";
 
 // knowledgeBaseIds 为空数组表示“全部知识库”
 const conversationColumns = `c.id, c.title, c.is_favorite AS isFavorite, c.archived_at IS NOT NULL AS archived,
@@ -19,7 +20,7 @@ const toDto = (row: RowDataPacket) => ({
 const fetchConversation = async (id: number) => {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT ${conversationColumns} FROM conversations c WHERE c.id = ? AND c.user_id = ?`,
-    [id, config.devUserId],
+    [id, currentUserId()],
   );
   return rows[0] ? toDto(rows[0]) : undefined;
 };
@@ -30,7 +31,7 @@ export const conversationRouter = Router();
 conversationRouter.get("/", async (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const conditions = ["c.user_id = ?", req.query.archived === "1" ? "c.archived_at IS NOT NULL" : "c.archived_at IS NULL"];
-  const params: (number | string)[] = [config.devUserId];
+  const params: (number | string)[] = [currentUserId()];
   if (q) {
     // 转义 LIKE 通配符，让用户输入的 % 和 _ 按字面匹配
     const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
@@ -97,7 +98,7 @@ conversationRouter.patch("/:id", async (req, res) => {
     ? await pool.query<ResultSetHeader>(`UPDATE conversations SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`, [
         ...params,
         id,
-        config.devUserId,
+        currentUserId(),
       ])
     : [undefined];
   if (!id || !result || result.affectedRows === 0) {
@@ -166,7 +167,7 @@ conversationRouter.post("/:id/summary", async (req, res) => {
 conversationRouter.delete("/:id", async (req, res) => {
   const id = parseId(req.params.id);
   const [result] = id
-    ? await pool.query<ResultSetHeader>("DELETE FROM conversations WHERE id = ? AND user_id = ?", [id, config.devUserId])
+    ? await pool.query<ResultSetHeader>("DELETE FROM conversations WHERE id = ? AND user_id = ?", [id, currentUserId()])
     : [undefined];
   if (!result || result.affectedRows === 0) {
     res.status(404).json({ error: "对话不存在" });

@@ -6,6 +6,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { recordActivity } from "../activity/repository";
 import { deleteVectors } from "../rag/qdrant";
+import { currentUserId } from "../auth/context";
 
 type KnowledgeBaseRow = RowDataPacket & {
   id: number;
@@ -19,7 +20,7 @@ type KnowledgeBaseRow = RowDataPacket & {
 // 查询知识库及其文档数；所有查询都带 user_id，避免越权读取
 const fetchKnowledgeBases = async (options: { id?: number; q?: string } = {}) => {
   const conditions = ["kb.user_id = ?"];
-  const params: (number | string)[] = [config.devUserId];
+  const params: (number | string)[] = [currentUserId()];
   if (options.id !== undefined) {
     conditions.push("kb.id = ?");
     params.push(options.id);
@@ -83,10 +84,10 @@ knowledgeBaseRouter.post("/", async (req, res) => {
   }
   const [result] = await pool.query<ResultSetHeader>(
     "INSERT INTO knowledge_bases (user_id, name, description) VALUES (?, ?, ?)",
-    [config.devUserId, fields.name, fields.description ?? ""],
+    [currentUserId(), fields.name, fields.description ?? ""],
   );
   const [created] = await fetchKnowledgeBases({ id: result.insertId });
-  await recordActivity(config.devUserId, "kb_created", created.name, result.insertId);
+  await recordActivity(currentUserId(), "kb_created", created.name, result.insertId);
   res.status(201).json(created);
 });
 
@@ -106,7 +107,7 @@ knowledgeBaseRouter.patch("/:id", async (req, res) => {
     fields.name ?? existing.name,
     fields.description ?? existing.description,
     id,
-    config.devUserId,
+    currentUserId(),
   ]);
   const [updated] = await fetchKnowledgeBases({ id });
   res.json(updated);
@@ -115,14 +116,14 @@ knowledgeBaseRouter.patch("/:id", async (req, res) => {
 knowledgeBaseRouter.delete("/:id", async (req, res) => {
   const id = parseId(req.params.id);
   const [result] = id
-    ? await pool.query<ResultSetHeader>("DELETE FROM knowledge_bases WHERE id = ? AND user_id = ?", [id, config.devUserId])
+    ? await pool.query<ResultSetHeader>("DELETE FROM knowledge_bases WHERE id = ? AND user_id = ?", [id, currentUserId()])
     : [undefined];
   if (!result || result.affectedRows === 0) {
     res.status(404).json({ error: "知识库不存在" });
     return;
   }
   // 记录由外键级联删除，磁盘上的文件需要单独清理
-  await rm(path.join(config.uploadDir, String(config.devUserId), String(id)), { recursive: true, force: true });
+  await rm(path.join(config.uploadDir, String(currentUserId()), String(id)), { recursive: true, force: true });
   await deleteVectors("knowledge_base_id", id as number).catch((error: unknown) => console.error("删除向量失败", error));
   res.status(204).end();
 });

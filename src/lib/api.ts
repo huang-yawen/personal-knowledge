@@ -23,12 +23,20 @@ export type DocumentDto = {
   updatedAt: string;
 };
 
+// 登录状态失效（会话过期、被踢下线）时的统一处理，由登录状态模块注册
+let onUnauthorized: (() => void) | undefined;
+export const setUnauthorizedHandler = (handler: () => void) => {
+  onUnauthorized = handler;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
     // 上传文件时由浏览器自动带上 multipart 边界，不能手动指定 Content-Type
     headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     ...init,
   });
+  // 账户接口自己处理 401（如登录密码错误），其余接口遇到 401 说明登录已失效
+  if (response.status === 401 && !path.startsWith("/auth/")) onUnauthorized?.();
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `请求失败（${response.status}）`);
@@ -83,6 +91,7 @@ export async function* streamChat(
     body: JSON.stringify({ messages, knowledgeBaseIds, conversationId }),
     signal,
   });
+  if (response.status === 401) onUnauthorized?.();
   if (!response.ok || !response.body) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `请求失败（${response.status}）`);
@@ -228,3 +237,21 @@ export const addNoteToKnowledgeBase = (id: number, knowledgeBaseId: number) =>
   request<NoteDto>(`/notes/${id}/knowledge-base`, { method: "PUT", body: JSON.stringify({ knowledgeBaseId }) });
 
 export const removeNoteFromKnowledgeBase = (id: number) => request<NoteDto>(`/notes/${id}/knowledge-base`, { method: "DELETE" });
+
+export type UserDto = { id: number; username: string; displayName: string; isAdmin: boolean };
+
+export const getMe = () => request<UserDto>("/auth/me");
+
+export const login = (username: string, password: string) =>
+  request<UserDto>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
+
+export const register = (input: { username: string; password: string; displayName?: string; inviteCode: string }) =>
+  request<UserDto>("/auth/register", { method: "POST", body: JSON.stringify(input) });
+
+export const logout = () => request<void>("/auth/logout", { method: "POST" });
+
+export const updateDisplayName = (displayName: string) =>
+  request<UserDto>("/auth/me", { method: "PATCH", body: JSON.stringify({ displayName }) });
+
+export const changePassword = (oldPassword: string, newPassword: string) =>
+  request<void>("/auth/password", { method: "POST", body: JSON.stringify({ oldPassword, newPassword }) });

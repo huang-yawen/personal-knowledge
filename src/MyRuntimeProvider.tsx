@@ -35,6 +35,8 @@ const chatAdapter: ChatModelAdapter = {
       } else if (event.type === "sources") {
         sources = event.sources;
         if (isCurrentThread()) setSources(event.sources);
+        // 来源在回答结束后才到达，需要再更新一次消息才能显示出来
+        yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
       } else if (event.type === "delta") {
         text += event.text;
         yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };

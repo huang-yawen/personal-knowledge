@@ -1,4 +1,5 @@
 import { config } from "../../config";
+import { currentUserId } from "../auth/context";
 
 const { url, collection } = config.qdrant;
 const UPSERT_BATCH = 100;
@@ -88,7 +89,7 @@ export type SearchHit = { score: number; payload: ChunkPoint["payload"] };
 // 检索总是先按用户过滤，再按知识库过滤（不传或为空则搜索全部知识库）
 export const searchPoints = async (vector: number[], options: { knowledgeBaseIds?: number[]; limit: number }) => {
   await ensureCollection();
-  const must: object[] = [{ key: "user_id", match: { value: config.devUserId } }];
+  const must: object[] = [{ key: "user_id", match: { value: currentUserId() } }];
   if (options.knowledgeBaseIds && options.knowledgeBaseIds.length > 0) {
     must.push({ key: "knowledge_base_id", match: { any: options.knowledgeBaseIds } });
   }
