@@ -199,3 +199,10 @@ export type NoteAiAction = "summary" | "outline" | "keywords" | "explain" | "rew
 // 只返回候选内容，不会修改笔记
 export const runNoteAi = (action: NoteAiAction, text: string) =>
   request<{ result: string }>("/notes/ai", { method: "POST", body: JSON.stringify({ action, text }) });
+
+// AI 生成笔记草稿：基于知识库检索资料，不会写库；确认后再用 createNote 保存
+export const generateNote = (topic: string, knowledgeBaseIds: number[] = []) =>
+  request<{ title: string; content: string; sources: NoteSourceInput[] }>("/notes/generate", {
+    method: "POST",
+    body: JSON.stringify({ topic, knowledgeBaseIds }),
+  });

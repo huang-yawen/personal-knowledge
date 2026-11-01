@@ -312,3 +312,25 @@
 .markdown-preview hr { margin: 1.2em 0; border: 0; border-top: 1px solid var(--line); }
 .markdown-preview blockquote { margin: .8em 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
 .editor-toolbar button:disabled { opacity: .4; cursor: default; }
+
+/* CodeMirror 编辑区 */
+.note-cm { flex: 1; min-height: 0; overflow: hidden; }
+.note-cm .cm-editor { height: 100%; }
+.note-cm .cm-scroller { overflow: auto; }
+
+/* 笔记页头部按钮组、AI 生成对话框 */
+.notes-head-actions { display: flex; gap: 8px; }
+.generate-dialog { width: min(640px, 100%); }
+.generate-hint { margin-bottom: 10px !important; color: var(--muted); font-size: 12px !important; }
+.generate-topic { width: 100%; padding: 10px 12px; resize: none; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: 14px; outline: none; }
+.generate-topic:focus { border-color: var(--blue); }
+.generate-draft { margin-top: 14px; max-height: 40vh; overflow-y: auto; padding: 4px 4px 0; font-size: 13px; }
+.summary-actions .accept-draft { border-color: transparent; background: var(--text); color: var(--surface); }
+.summary-actions button:disabled { opacity: .5; cursor: default; }
+
+/* 阅读抽屉：摘录为笔记 */
+.reader-chunk { position: relative; }
+.reader-extract { margin-top: 6px; display: block; height: 24px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); font-size: 12px; white-space: normal; cursor: pointer; opacity: 0; }
+.reader-chunk:hover .reader-extract, .reader-chunk:focus-within .reader-extract, .reader-extract:disabled { opacity: 1; }
+.reader-extract:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+@media (hover: none) { .reader-extract { opacity: 1; } }

@@ -12,7 +12,10 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
+import type { EditorView } from "@uiw/react-codemirror";
 import { MarkdownView } from "@/components/MarkdownView";
+import { NoteEditor } from "@/components/NoteEditor";
+import { NoteGenerateDialog } from "@/components/NoteGenerateDialog";
 import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
@@ -77,7 +80,8 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
   const pending = useRef<({ id: number } & NotePatch) | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
   const refreshTagOptions = useCallback(() => {
@@ -177,17 +181,22 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectNote 每次渲染都会重建，只在请求变化时触发
   }, [pendingNoteId]);
 
+  // 新创建的笔记（手动新建或 AI 生成）加入列表并打开
+  const showCreated = async (note: NoteDto) => {
+    await flush();
+    setNotes((items) => [toListItem(note), ...items]);
+    setCurrent(note);
+    setIsPreview(false);
+    setAiDraft(null);
+    setAiError(null);
+    setSelection({ start: 0, end: 0 });
+    setSaveState("saved");
+  };
+
   const newNote = async () => {
     await flush();
     try {
-      const note = await createNote();
-      setNotes((items) => [toListItem(note), ...items]);
-      setCurrent(note);
-      setIsPreview(false);
-      setAiDraft(null);
-      setAiError(null);
-      setSelection({ start: 0, end: 0 });
-      setSaveState("saved");
+      await showCreated(await createNote());
     } catch (reason) {
       setError((reason as Error).message);
     }
@@ -208,16 +217,16 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
   };
   // 工具栏：在选区两侧插入 Markdown 语法，没有选区时插入占位文字并选中它
   const applyFormat = (format: (selected: string) => { text: string; selectFrom: number; selectTo: number }) => {
-    const editor = editorRef.current;
-    if (!current || !editor) return;
-    const { selectionStart: start, selectionEnd: end } = editor;
-    const result = format(current.content.slice(start, end));
-    edit({ content: current.content.slice(0, start) + result.text + current.content.slice(end) });
-    // 等内容更新后再恢复焦点和选区
-    requestAnimationFrame(() => {
-      editor.focus();
-      editor.setSelectionRange(start + result.selectFrom, start + result.selectTo);
+    const view = editorViewRef.current;
+    if (!view) return;
+    const { from, to } = view.state.selection.main;
+    const result = format(view.state.sliceDoc(from, to));
+    // 编辑器的文档变化会触发 onChange，进而走自动保存
+    view.dispatch({
+      changes: { from, to, insert: result.text },
+      selection: { anchor: from + result.selectFrom, head: from + result.selectTo },
     });
+    view.focus();
   };
 
   const formatBold = () =>
@@ -290,10 +299,25 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
           <p className="eyebrow">知识沉淀</p>
           <h2>我的笔记</h2>
         </div>
-        <button className="knowledge-create" type="button" onClick={() => void newNote()}>
-          <FilePlus2 size={17} /> 新建笔记
-        </button>
+        <div className="notes-head-actions">
+          <button className="knowledge-create" type="button" onClick={() => setIsGenerating(true)}>
+            <WandSparkles size={17} /> AI 生成
+          </button>
+          <button className="knowledge-create" type="button" onClick={() => void newNote()}>
+            <FilePlus2 size={17} /> 新建笔记
+          </button>
+        </div>
       </div>
+      {isGenerating && (
+        <NoteGenerateDialog
+          onClose={() => setIsGenerating(false)}
+          onSaved={(note) => {
+            setIsGenerating(false);
+            void showCreated(note);
+            refreshTagOptions();
+          }}
+        />
+      )}
       <div className={`notes-workspace${isAiOpen ? " has-ai" : ""}`}>
         <aside className="notes-list-panel">
           <div className="notes-search">
@@ -458,14 +482,14 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
               <MarkdownView content={current.content} />
             </article>
           ) : (
-            <textarea
-              ref={editorRef}
-              className="note-editor"
+            <NoteEditor
               value={current.content}
-              placeholder="开始记录你的想法…"
-              onChange={(event) => edit({ content: event.target.value })}
-              onSelect={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
-              spellCheck
+              onChange={(content) => edit({ content })}
+              onSelect={(start, end) => setSelection({ start, end })}
+              onReady={(view) => {
+                editorViewRef.current = view;
+              }}
+              onBold={formatBold}
             />
           )}
           {current.sources.length > 0 && (
