@@ -132,6 +132,23 @@ documentRouter.post("/knowledge-bases/:id/documents", async (req, res) => {
     return;
   }
 
+  // 每用户的文档数和总存储配额（含笔记生成的文档）
+  const [quota] = await pool.query<RowDataPacket[]>(
+    "SELECT COUNT(*) AS docs, COALESCE(SUM(size_bytes), 0) AS bytes FROM documents WHERE user_id = ?",
+    [currentUserId()],
+  );
+  const overDocs = Number(quota[0].docs) >= config.limits.maxDocsPerUser;
+  const overBytes = Number(quota[0].bytes) + file.size > config.limits.maxBytesPerUser;
+  if (overDocs || overBytes) {
+    await discard(file);
+    res.status(409).json({
+      error: overDocs
+        ? `每个账号最多 ${config.limits.maxDocsPerUser} 份文档`
+        : `每个账号文件总量最多 ${config.limits.maxBytesPerUser / 1024 / 1024}MB`,
+    });
+    return;
+  }
+
   const ext = path.extname(file.originalname).toLowerCase();
   if (ext === ".pdf") {
     // 扩展名可以伪造，再检查 PDF 文件头

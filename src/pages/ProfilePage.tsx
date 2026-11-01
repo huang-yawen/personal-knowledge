@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type FormEvent } from "react";
+import { useEffect, useState, type ComponentType, type FormEvent } from "react";
 import {
   BarChart3,
   Settings2,
@@ -7,7 +7,20 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { changePassword, updateDisplayName } from "@/lib/api";
+import {
+  changePassword,
+  deleteAccount,
+  exportData,
+  getSettings,
+  getStats,
+  listKnowledgeBases,
+  saveSettings,
+  updateDisplayName,
+  type KnowledgeBaseDto,
+  type ReplyStyle,
+  type SettingsDto,
+  type StatsDto,
+} from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 
 export function ProfilePage({
@@ -20,9 +33,6 @@ export function ProfilePage({
   const [activeSection, setActiveSection] = useState<
     "profile" | "ai" | "system" | "usage"
   >("profile");
-  const [model, setModel] = useState("DeepSeek Chat");
-  const [replyStyle, setReplyStyle] = useState("平衡");
-  const [defaultLibrary, setDefaultLibrary] = useState("全部知识库");
   const sections = [
     { id: "profile" as const, label: "个人资料", icon: UserRound },
     { id: "ai" as const, label: "AI 设置", icon: SlidersHorizontal },
@@ -55,47 +65,7 @@ export function ProfilePage({
         </aside>
         <section className="profile-content">
           {activeSection === "profile" && <AccountSection />}
-          {activeSection === "ai" && (
-            <div className="settings-section">
-              <SettingsHeading
-                icon={Sparkles}
-                title="AI 设置"
-                description="调整 AI 在对话和笔记中协助你的方式。"
-              />
-              <SettingsSelect
-                label="默认模型"
-                value={model}
-                options={["DeepSeek Chat", "DeepSeek Reasoner"]}
-                onChange={setModel}
-              />
-              <SettingsSelect
-                label="回复风格"
-                value={replyStyle}
-                options={["简洁", "平衡", "详细"]}
-                onChange={setReplyStyle}
-              />
-              <SettingsSelect
-                label="默认知识库范围"
-                value={defaultLibrary}
-                options={["全部知识库", "机器学习", "产品与设计", "个人成长"]}
-                onChange={setDefaultLibrary}
-              />
-              <div className="setting-row">
-                <div>
-                  <strong>在回答中展示引用来源</strong>
-                  <p>当回答使用你的资料时，显示对应文档及原文片段。</p>
-                </div>
-                <Toggle initial />
-              </div>
-              <div className="setting-row">
-                <div>
-                  <strong>允许 AI 使用笔记上下文</strong>
-                  <p>在笔记中调用 AI 辅助时，会将当前内容作为上下文发送。</p>
-                </div>
-                <Toggle initial />
-              </div>
-            </div>
-          )}
+          {activeSection === "ai" && <AiSettings />}
           {activeSection === "system" && (
             <div className="settings-section">
               <SettingsHeading
@@ -125,13 +95,6 @@ export function ProfilePage({
                   </button>
                 </div>
               </div>
-              <div className="setting-row">
-                <div>
-                  <strong>跟随系统主题</strong>
-                  <p>当系统的深浅主题切换时自动同步。</p>
-                </div>
-                <Toggle />
-              </div>
               <div className="danger-zone">
                 <div>
                   <span>
@@ -139,38 +102,14 @@ export function ProfilePage({
                   </span>
                   <div>
                     <strong>导出个人数据</strong>
-                    <p>导出知识库、笔记、对话和学习记录的副本。</p>
+                    <p>下载知识库（含文档分块文本）、笔记、对话和轨迹的 JSON 副本，不含原始文件。</p>
                   </div>
                 </div>
-                <button type="button">请求导出</button>
+                <ExportButton />
               </div>
             </div>
           )}
-          {activeSection === "usage" && (
-            <div className="settings-section">
-              <SettingsHeading
-                icon={BarChart3}
-                title="使用统计"
-                description="了解你的知识积累和 AI 使用情况。"
-              />
-              <div className="usage-grid">
-                <UsageCard label="AI 对话" value="128" detail="本月 34 次" />
-                <UsageCard label="文档处理" value="286" detail="成功率 98.6%" />
-                <UsageCard label="笔记数量" value="74" detail="本月新增 9 篇" />
-                <UsageCard label="知识库" value="12" detail="总计 421 个片段" />
-              </div>
-              <div className="usage-summary">
-                <div>
-                  <p className="section-kicker">本周活跃情况</p>
-                  <h3>你已经连续学习 6 天</h3>
-                  <p>继续保持节奏，让知识在使用中沉淀。</p>
-                </div>
-                <span>
-                  6<small>天</small>
-                </span>
-              </div>
-            </div>
-          )}
+          {activeSection === "usage" && <UsageStats />}
         </section>
       </div>
     </div>
@@ -236,15 +175,9 @@ function SettingsSelect({
     </label>
   );
 }
-function Toggle({ initial = false }: { initial?: boolean }) {
-  const [enabled, setEnabled] = useState(initial);
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
   return (
-    <button
-      type="button"
-      className={`toggle${enabled ? " enabled" : ""}`}
-      aria-pressed={enabled}
-      onClick={() => setEnabled((value) => !value)}
-    >
+    <button type="button" className={`toggle${checked ? " enabled" : ""}`} aria-pressed={checked} onClick={() => onChange(!checked)}>
       <span />
     </button>
   );
@@ -274,6 +207,7 @@ function AccountSection() {
   const [passwords, setPasswords] = useState({ oldPassword: "", newPassword: "" });
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
 
   const run = async (task: () => Promise<string>) => {
     setBusy(true);
@@ -304,42 +238,218 @@ function AccountSection() {
     });
   };
 
+  const removeAccount = (event: FormEvent) => {
+    event.preventDefault();
+    if (!window.confirm("确定永久删除账号和全部数据吗？此操作无法恢复。")) return;
+    void run(async () => {
+      await deleteAccount(deletePassword);
+      await signOut();
+      return "账号已删除";
+    });
+  };
+
   return (
     <div className="settings-section">
-      <SettingsHeading icon={UserRound} title="账号" description="管理你的登录信息。" />
-      <div className="profile-identity">
-        <span className="profile-avatar-large">{(user?.displayName ?? "?").slice(0, 1).toUpperCase()}</span>
-        <div>
-          <strong>{user?.displayName}</strong>
-          <p>@{user?.username}{user?.isAdmin ? " · 管理员" : ""}</p>
+      <SettingsHeading icon={UserRound} title="账号" description="管理你的登录信息与安全设置。" />
+      <div className="account-grid">
+        <div className="account-identity">
+          <span className="profile-avatar-large">{(user?.displayName ?? "?").slice(0, 1).toUpperCase()}</span>
+          <div>
+            <strong>{user?.displayName}</strong>
+            <p>@{user?.username}{user?.isAdmin ? " · 管理员" : ""}</p>
+          </div>
+          <button type="button" onClick={() => void signOut()}>退出登录</button>
         </div>
+        <form className="account-panel" onSubmit={saveName}>
+          <h4>显示名称</h4>
+          <p>显示在侧栏和工作台的问候语中。</p>
+          <SettingsInput label="名称" value={displayName} onChange={setDisplayName} />
+          <div className="settings-footer">
+            <span />
+            <button type="submit" disabled={busy || !displayName.trim() || displayName.trim() === user?.displayName}>保存名称</button>
+          </div>
+        </form>
+        <form className="account-panel" onSubmit={savePassword}>
+          <h4>修改密码</h4>
+          <p>修改后，其他设备上的登录会失效。</p>
+          <label className="settings-input">
+            <span>旧密码</span>
+            <input type="password" autoComplete="current-password" value={passwords.oldPassword} onChange={(event) => setPasswords({ ...passwords, oldPassword: event.target.value })} />
+          </label>
+          <label className="settings-input">
+            <span>新密码（8 到 128 位）</span>
+            <input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={passwords.newPassword} onChange={(event) => setPasswords({ ...passwords, newPassword: event.target.value })} />
+          </label>
+          <div className="settings-footer">
+            <span />
+            <button type="submit" disabled={busy || !passwords.oldPassword || passwords.newPassword.length < 8}>修改密码</button>
+          </div>
+        </form>
+        <form className="account-panel" onSubmit={removeAccount}>
+          <h4>删除账号</h4>
+          <p>永久删除账号及全部知识库、文档、笔记、对话和向量，无法恢复。建议先导出个人数据。</p>
+          <label className="settings-input">
+            <span>输入密码确认</span>
+            <input type="password" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} />
+          </label>
+          <div className="settings-footer">
+            <span />
+            <button type="submit" disabled={busy || !deletePassword}>永久删除账号</button>
+          </div>
+        </form>
       </div>
-      <form onSubmit={saveName}>
-        <SettingsInput label="显示名称" value={displayName} onChange={setDisplayName} />
-        <div className="settings-footer">
-          <span />
-          <button type="submit" disabled={busy || !displayName.trim() || displayName.trim() === user?.displayName}>保存名称</button>
-        </div>
-      </form>
-      <form onSubmit={savePassword}>
-        <label className="settings-input">
-          <span>旧密码</span>
-          <input type="password" autoComplete="current-password" value={passwords.oldPassword} onChange={(event) => setPasswords({ ...passwords, oldPassword: event.target.value })} />
-        </label>
-        <label className="settings-input">
-          <span>新密码（8 到 128 位）</span>
-          <input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={passwords.newPassword} onChange={(event) => setPasswords({ ...passwords, newPassword: event.target.value })} />
-        </label>
-        <div className="settings-footer">
-          <span />
-          <button type="submit" disabled={busy || !passwords.oldPassword || passwords.newPassword.length < 8}>修改密码</button>
-        </div>
-      </form>
       {message && <p className={message.isError ? "form-error" : "account-message"} role="status">{message.text}</p>}
-      <div className="settings-footer">
-        <span />
-        <button type="button" onClick={() => void signOut()}>退出登录</button>
-      </div>
     </div>
+  );
+}
+
+const REPLY_STYLE_LABELS: Record<ReplyStyle, string> = { concise: "简洁", balanced: "平衡", detailed: "详细" };
+const TOP_K_OPTIONS = [3, 5, 8, 10];
+
+// AI 设置：改动后立即保存，保存失败时保留原值并提示
+function AiSettings() {
+  const [settings, setSettings] = useState<SettingsDto>();
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDto[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([getSettings(), listKnowledgeBases()])
+      .then(([loaded, bases]) => {
+        setSettings(loaded);
+        setKnowledgeBases(bases);
+      })
+      .catch((reason: Error) => setError(reason.message));
+  }, []);
+
+  const update = async (next: SettingsDto) => {
+    setError("");
+    try {
+      setSettings(await saveSettings(next));
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
+  const toggleKnowledgeBase = (id: number, on: boolean) => {
+    if (!settings) return;
+    const ids = on ? [...settings.defaultKnowledgeBaseIds, id] : settings.defaultKnowledgeBaseIds.filter((item) => item !== id);
+    void update({ ...settings, defaultKnowledgeBaseIds: ids });
+  };
+
+  return (
+    <div className="settings-section">
+      <SettingsHeading icon={Sparkles} title="AI 设置" description="调整 AI 在对话中回答你的方式，修改后立即生效。" />
+      {error && <p className="form-error" role="status">{error}</p>}
+      {settings && (
+        <>
+          <div className="setting-row">
+            <div>
+              <strong>回复风格</strong>
+              <p>简洁：直接给结论和要点；详细：分点展开并举例。</p>
+            </div>
+            <div className="theme-choice">
+              {(Object.keys(REPLY_STYLE_LABELS) as ReplyStyle[]).map((style) => (
+                <button key={style} type="button" className={settings.replyStyle === style ? "selected" : ""} onClick={() => void update({ ...settings, replyStyle: style })}>
+                  {REPLY_STYLE_LABELS[style]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <SettingsSelect
+            label="每次回答引用的资料条数"
+            value={`${settings.topK} 条`}
+            options={TOP_K_OPTIONS.map((count) => `${count} 条`)}
+            onChange={(value) => void update({ ...settings, topK: Number.parseInt(value, 10) })}
+          />
+          <div className="setting-row">
+            <div>
+              <strong>新对话默认的知识库范围</strong>
+              <p>都不选表示使用全部知识库。下次打开应用时生效。</p>
+            </div>
+          </div>
+          {knowledgeBases.map((kb) => (
+            <div className="setting-row" key={kb.id}>
+              <div>
+                <strong>{kb.name}</strong>
+              </div>
+              <Toggle checked={settings.defaultKnowledgeBaseIds.includes(kb.id)} onChange={(on) => toggleKnowledgeBase(kb.id, on)} />
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// 使用统计：全部来自后端的真实数据
+function UsageStats() {
+  const [stats, setStats] = useState<StatsDto>();
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    getStats()
+      .then(setStats)
+      .catch((reason: Error) => setError(reason.message));
+  }, []);
+
+  const percent = stats ? Math.min(100, Math.round((stats.tokens.today / stats.tokens.dailyLimit) * 100)) : 0;
+
+  return (
+    <div className="settings-section">
+      <SettingsHeading icon={BarChart3} title="使用统计" description="了解你的知识积累和 AI 使用情况。" />
+      {error && <p className="form-error" role="status">{error}</p>}
+      {stats && (
+        <>
+          <div className="usage-grid">
+            <UsageCard label="AI 对话" value={String(stats.conversations)} detail={`本月新增 ${stats.conversationsMonth} 个`} />
+            <UsageCard label="文档" value={String(stats.documents)} detail={`已处理 ${stats.documentsDone} 份，失败 ${stats.documentsFailed} 份`} />
+            <UsageCard label="笔记数量" value={String(stats.notes)} detail={`本月新增 ${stats.notesMonth} 篇`} />
+            <UsageCard label="知识库" value={String(stats.knowledgeBases)} detail={`共 ${stats.chunks} 个片段`} />
+          </div>
+          <div className="usage-summary">
+            <div>
+              <p className="section-kicker">今日模型额度</p>
+              <h3>
+                已用 {stats.tokens.today.toLocaleString()} / {stats.tokens.dailyLimit.toLocaleString()} tokens
+              </h3>
+              <p>
+                本月累计 {stats.tokens.month.toLocaleString()}，历史累计 {stats.tokens.total.toLocaleString()}。额度每天零点重置。
+              </p>
+            </div>
+            <span>
+              {percent}
+              <small>%</small>
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// 下载个人数据副本
+function ExportButton() {
+  const [state, setState] = useState<{ busy: boolean; error: string }>({ busy: false, error: "" });
+  const download = async () => {
+    setState({ busy: true, error: "" });
+    try {
+      const url = URL.createObjectURL(await exportData());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `personal-knowledge-export-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setState({ busy: false, error: "" });
+    } catch (reason) {
+      setState({ busy: false, error: (reason as Error).message });
+    }
+  };
+  return (
+    <>
+      <button type="button" disabled={state.busy} onClick={() => void download()}>
+        {state.busy ? "导出中…" : "导出"}
+      </button>
+      {state.error && <p className="form-error" role="status">{state.error}</p>}
+    </>
   );
 }

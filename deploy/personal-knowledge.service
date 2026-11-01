@@ -1,0 +1,18 @@
+# 后端服务：放到 /etc/systemd/system/，然后 systemctl enable --now personal-knowledge
+[Unit]
+Description=Personal Knowledge API
+After=network.target mysql.service qdrant.service
+Wants=qdrant.service
+
+[Service]
+User=pk
+WorkingDirectory=/opt/personal-knowledge/server
+ExecStart=/usr/local/bin/npm run start
+Restart=on-failure
+RestartSec=3
+MemoryMax=400M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

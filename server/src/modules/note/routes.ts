@@ -7,6 +7,7 @@ import { addNoteToKnowledgeBase, getNoteKnowledgeBase, NoteKnowledgeError, remov
 import { parseId } from "../knowledge-base/routes";
 import { describeRetrievalError, ownsKnowledgeBases, parseIdList, retrieveChunks } from "../rag/retrieve";
 import { currentUserId } from "../auth/context";
+import { recordUsage } from "../usage";
 
 const MAX_TITLE_CHARS = 100;
 const MAX_CONTENT_CHARS = 200_000;
@@ -46,6 +47,21 @@ const parseSources = (value: unknown): SourceInput[] | undefined => {
     sources.push({ type, refId, chunkId: chunkId ?? null, label: Array.from(label.trim()).slice(0, MAX_LABEL_CHARS).join("") });
   }
   return sources;
+};
+
+// 来源必须是当前用户自己的文档、对话和分块，防止写入指向他人资源的引用
+const ownsSources = async (sources: SourceInput[]) => {
+  const owned = async (table: "documents" | "conversations" | "document_chunks", ids: number[]) => {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return true;
+    const [rows] = await pool.query<RowDataPacket[]>(`SELECT id FROM ${table} WHERE user_id = ? AND id IN (?)`, [currentUserId(), unique]);
+    return rows.length === unique.length;
+  };
+  return (
+    (await owned("documents", sources.filter((s) => s.type === "document").map((s) => s.refId))) &&
+    (await owned("conversations", sources.filter((s) => s.type === "conversation").map((s) => s.refId))) &&
+    (await owned("document_chunks", sources.flatMap((s) => (s.chunkId === null ? [] : [s.chunkId]))))
+  );
 };
 
 // 取笔记详情及来源；available 表示来源资源现在是否还存在（被删除后链接失效）
@@ -166,7 +182,8 @@ noteRouter.post("/ai", async (req, res) => {
       res.status(502).json({ error: `模型服务请求失败（HTTP ${response.status}）` });
       return;
     }
-    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[] };
+    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[]; usage?: { total_tokens?: number } };
+    recordUsage("note_ai", data.usage?.total_tokens);
     const result = data.choices?.[0]?.message?.content?.trim();
     if (!result) {
       res.status(502).json({ error: "模型没有返回内容" });
@@ -237,7 +254,8 @@ ${materials}`,
       res.status(502).json({ error: `模型服务请求失败（HTTP ${response.status}）` });
       return;
     }
-    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[] };
+    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[]; usage?: { total_tokens?: number } };
+    recordUsage("note_generate", data.usage?.total_tokens);
     const text = data.choices?.[0]?.message?.content?.trim();
     if (!text) {
       res.status(502).json({ error: "模型没有返回内容" });
@@ -274,6 +292,10 @@ noteRouter.post("/", async (req, res) => {
   }
   if (!sources) {
     res.status(400).json({ error: `来源格式不正确（最多 ${MAX_SOURCES} 个）` });
+    return;
+  }
+  if (!(await ownsSources(sources))) {
+    res.status(400).json({ error: "来源不存在或无权引用" });
     return;
   }
   // 带来源的创建（保存回答、摘录、AI 生成）按“标题 + 正文完全相同”去重，已存在则直接返回，避免重复点击产生多篇

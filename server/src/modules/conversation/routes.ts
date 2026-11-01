@@ -4,6 +4,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { parseId } from "../knowledge-base/routes";
 import { currentUserId } from "../auth/context";
+import { recordUsage } from "../usage";
 
 // knowledgeBaseIds 为空数组表示“全部知识库”
 const conversationColumns = `c.id, c.title, c.is_favorite AS isFavorite, c.archived_at IS NOT NULL AS archived,
@@ -151,7 +152,8 @@ conversationRouter.post("/:id/summary", async (req, res) => {
       res.status(502).json({ error: `模型服务请求失败（HTTP ${response.status}）` });
       return;
     }
-    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[] };
+    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[]; usage?: { total_tokens?: number } };
+    recordUsage("summary", data.usage?.total_tokens);
     const summary = data.choices?.[0]?.message?.content?.trim();
     if (!summary) {
       res.status(502).json({ error: "模型没有返回总结内容" });

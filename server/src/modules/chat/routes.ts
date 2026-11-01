@@ -17,6 +17,8 @@ import {
   touchConversation,
   type ChatMessage,
 } from "../conversation/repository";
+import { estimateTokens, recordUsage } from "../usage";
+import { getSettings, type ReplyStyle } from "../settings/repository";
 import { buildSystemPrompt } from "./prompt";
 
 type Usage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
@@ -41,6 +43,7 @@ const parseMessages = (value: unknown): ChatMessage[] | undefined => {
 const streamAnswer = async (
   messages: ChatMessage[],
   chunks: RetrievedChunk[],
+  style: ReplyStyle,
   signal: AbortSignal,
   onDelta: (text: string) => void,
 ) => {
@@ -49,7 +52,7 @@ const streamAnswer = async (
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.deepseek.apiKey}` },
     body: JSON.stringify({
       model: config.deepseek.model,
-      messages: [{ role: "system", content: buildSystemPrompt(chunks) }, ...messages],
+      messages: [{ role: "system", content: buildSystemPrompt(chunks, style) }, ...messages],
       stream: true,
       stream_options: { include_usage: true },
       thinking: { type: "disabled" },
@@ -90,7 +93,11 @@ const streamAnswer = async (
 };
 
 // 根据问答生成追问建议：非流式短调用，失败时返回空数组，不影响主回答
-const generateFollowups = async (question: string, answer: string, signal: AbortSignal): Promise<string[]> => {
+const generateFollowups = async (
+  question: string,
+  answer: string,
+  signal: AbortSignal,
+): Promise<{ items: string[]; tokens: number | undefined }> => {
   try {
     const response = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
       method: "POST",
@@ -110,16 +117,17 @@ const generateFollowups = async (question: string, answer: string, signal: Abort
       }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
     });
-    if (!response.ok) return [];
-    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[] };
-    return (data.choices?.[0]?.message?.content ?? "")
+    if (!response.ok) return { items: [], tokens: undefined };
+    const data = (await response.json()) as { choices?: { message?: { content?: string | null } }[]; usage?: { total_tokens?: number } };
+    const items = (data.choices?.[0]?.message?.content ?? "")
       .split("\n")
       .map((line) => line.replace(/^\s*(?:[-*\d.、)]+\s*)/, "").trim())
       .filter((line) => line.length > 0 && line.length <= 60)
       .slice(0, 3);
+    return { items, tokens: data.usage?.total_tokens };
   } catch (error) {
     if (!signal.aborted) console.error("追问建议生成失败", error);
-    return [];
+    return { items: [], tokens: undefined };
   }
 };
 
@@ -175,6 +183,7 @@ chatRouter.post("/", async (req, res) => {
   let hits = 0;
   let topScore: number | undefined;
   let usage: Usage | undefined;
+  let answer = "";
   // 分段耗时（毫秒），写入日志便于定位慢在检索还是生成
   let retrievalMs: number | undefined;
   let firstTokenMs: number | undefined;
@@ -187,8 +196,9 @@ chatRouter.post("/", async (req, res) => {
     await touchConversation(activeConversationId, knowledgeBaseIds);
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
+    const settings = await getSettings();
     const retrievalStartedAt = Date.now();
-    const chunks = await retrieveChunks(question, { knowledgeBaseIds }).catch((error: unknown) => {
+    const chunks = await retrieveChunks(question, { knowledgeBaseIds, limit: settings.topK }).catch((error: unknown) => {
       console.error("检索失败", error);
       throw new ModelError(describeRetrievalError(error));
     });
@@ -197,14 +207,13 @@ chatRouter.post("/", async (req, res) => {
     topScore = chunks[0]?.score;
     const retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
 
-    let answer = "";
     const onDelta = (text: string) => {
       firstTokenMs ??= Date.now() - startedAt;
       answer += text;
       writeEvent(res, { type: "delta", text });
     };
     // 没有检索到资料时也照常调用模型，由提示词引导它用自身知识回答
-    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, controller.signal, onDelta);
+    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, settings.replyStyle, controller.signal, onDelta);
     // 只展示回答里真正用 [编号] 引用到的来源；模型用自身知识回答时没有来源
     const cited = citedIndexes(answer);
     const sources = retrieved.filter((source) => cited.has(source.index));
@@ -216,7 +225,8 @@ chatRouter.post("/", async (req, res) => {
       const followupStartedAt = Date.now();
       const followups = await generateFollowups(question, answer, controller.signal);
       followupMs = Date.now() - followupStartedAt;
-      if (followups.length > 0) writeEvent(res, { type: "followups", items: followups });
+      recordUsage("followup", followups.tokens);
+      if (followups.items.length > 0) writeEvent(res, { type: "followups", items: followups.items });
     }
     writeEvent(res, { type: "done", usage });
   } catch (error) {
@@ -226,6 +236,8 @@ chatRouter.post("/", async (req, res) => {
     }
   } finally {
     res.end();
+    // 记账：正常结束用模型返回的 usage；中途停止拿不到时按字数估算
+    if (usage || answer) recordUsage("chat", usage?.total_tokens ?? estimateTokens(question.length + answer.length));
     // 记录检索参数与用量，便于排查幻觉和成本；不记录问题和回答内容
     console.log(
       JSON.stringify({

@@ -255,3 +255,47 @@ export const updateDisplayName = (displayName: string) =>
 
 export const changePassword = (oldPassword: string, newPassword: string) =>
   request<void>("/auth/password", { method: "POST", body: JSON.stringify({ oldPassword, newPassword }) });
+
+export type ReplyStyle = "concise" | "balanced" | "detailed";
+
+export type SettingsDto = {
+  replyStyle: ReplyStyle;
+  // 每次回答引用的资料条数
+  topK: number;
+  // 新对话默认的知识库范围，空数组表示全部
+  defaultKnowledgeBaseIds: number[];
+};
+
+export const getSettings = () => request<SettingsDto>("/settings");
+
+export const saveSettings = (settings: SettingsDto) =>
+  request<SettingsDto>("/settings", { method: "PUT", body: JSON.stringify(settings) });
+
+export type StatsDto = {
+  conversations: number;
+  conversationsMonth: number;
+  knowledgeBases: number;
+  documents: number;
+  documentsDone: number;
+  documentsFailed: number;
+  chunks: number;
+  notes: number;
+  notesMonth: number;
+  tokens: { today: number; month: number; total: number; dailyLimit: number };
+};
+
+export const getStats = () => request<StatsDto>("/stats");
+
+// 导出个人数据：返回 JSON 文件内容，由调用方触发下载
+export const exportData = async () => {
+  const response = await fetch("/api/account/export");
+  if (response.status === 401) onUnauthorized?.();
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `请求失败（${response.status}）`);
+  }
+  return response.blob();
+};
+
+export const deleteAccount = (password: string) =>
+  request<void>("/account", { method: "DELETE", body: JSON.stringify({ password }) });

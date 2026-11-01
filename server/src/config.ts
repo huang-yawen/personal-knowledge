@@ -7,6 +7,12 @@ const required = (name: string): string => {
   return value;
 };
 
+// 可选的数值型环境变量：未设置或不是正整数时用默认值
+const numberEnv = (name: string, fallback: number): number => {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+};
+
 export const config = {
   port: Number(process.env.PORT ?? 3001),
   embedding: {
@@ -29,6 +35,16 @@ export const config = {
   uploadDir: path.resolve(import.meta.dirname, "..", "uploads"),
   maxFileBytes: 20 * 1024 * 1024,
   maxDocsPerKnowledgeBase: 100,
+  // 每用户的限流与额度，均可用环境变量调整
+  limits: {
+    chatPerMinute: numberEnv("LIMIT_CHAT_PER_MINUTE", 20),
+    aiPerMinute: numberEnv("LIMIT_AI_PER_MINUTE", 10),
+    uploadPerMinute: numberEnv("LIMIT_UPLOAD_PER_MINUTE", 10),
+    apiPerMinute: numberEnv("LIMIT_API_PER_MINUTE", 300),
+    dailyTokens: numberEnv("LIMIT_DAILY_TOKENS", 200_000),
+    maxDocsPerUser: numberEnv("LIMIT_DOCS_PER_USER", 100),
+    maxBytesPerUser: numberEnv("LIMIT_MB_PER_USER", 200) * 1024 * 1024,
+  },
   // 账户系统接入前的固定用户 id：第一个注册的账号沿用这个 id，从而自动接管已有数据
   legacyUserId: Number(process.env.DEV_USER_ID ?? 1),
   mysql: {

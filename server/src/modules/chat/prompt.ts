@@ -1,14 +1,22 @@
 import type { RetrievedChunk } from "../rag/retrieve";
+import type { ReplyStyle } from "../settings/repository";
+
+// 用户在个人中心选择的回复风格；平衡为默认，不额外约束
+const STYLE_HINTS: Record<ReplyStyle, string> = {
+  concise: "\n\n回答风格：尽量简洁，直接给结论和要点，一般不超过 200 字，除非用户明确要求展开。",
+  balanced: "",
+  detailed: "\n\n回答风格：尽量详细，分点展开，必要时给出例子和对比。",
+};
 
 // 资料以编号形式放进系统提示词，模型用 [编号] 标注来源，前端据此对应引用卡片。
 // 资料只是优先参考：相关就引用，不相关或不足时允许用模型自身知识回答，并明确告知用户
-export const buildSystemPrompt = (chunks: RetrievedChunk[]) => {
+export const buildSystemPrompt = (chunks: RetrievedChunk[], style: ReplyStyle = "balanced") => {
   if (chunks.length === 0) {
     return `你是个人知识库助手。用户的知识库里没有检索到相关资料。
 1. 请直接用你自己的知识回答用户的问题，需要详细解释、举例、总结时可以充分展开。
 2. 回答开头用一句话说明“知识库中没有找到相关内容，以下根据通用知识回答”。
 3. 如果用户明显是在询问他自己的资料（例如“我的文档里……”），不要编造，提示他先在知识库上传并处理好相关文件。
-4. 使用与用户提问相同的语言回答。`;
+4. 使用与用户提问相同的语言回答。${STYLE_HINTS[style]}`;
   }
   const materials = chunks
     .map((chunk, index) => `[${index + 1}] 《${chunk.documentName}》${chunk.page ? `第 ${chunk.page} 页` : ""}\n${chunk.content}`)
@@ -21,5 +29,5 @@ export const buildSystemPrompt = (chunks: RetrievedChunk[]) => {
 5. 使用与用户提问相同的语言回答。
 
 资料：
-${materials}`;
+${materials}${STYLE_HINTS[style]}`;
 };

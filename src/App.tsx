@@ -10,7 +10,9 @@ import { NotesPage } from "@/pages/NotesPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ConversationList } from "@/components/ConversationList";
+import { getSettings } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
 
@@ -40,6 +42,15 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
+
+  // 登录后应用个人中心里设置的默认知识库范围；读取失败就保持“全部知识库”
+  useEffect(() => {
+    getSettings()
+      .then(({ defaultKnowledgeBaseIds }) => {
+        if (defaultKnowledgeBaseIds.length > 0) useChatStore.getState().setKnowledgeBaseIds(defaultKnowledgeBaseIds);
+      })
+      .catch(console.error);
+  }, []);
 
   // 从阅读抽屉或对话菜单跳到笔记页并选中某篇笔记
   const openNote = (id: number) => {

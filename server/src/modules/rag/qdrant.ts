@@ -75,8 +75,8 @@ export const upsertPoints = async (points: ChunkPoint[]) => {
   }
 };
 
-// 按文档或知识库删除向量
-export const deleteVectors = async (field: "document_id" | "knowledge_base_id", id: number) => {
+// 按文档、知识库或用户删除向量
+export const deleteVectors = async (field: "document_id" | "knowledge_base_id" | "user_id", id: number) => {
   await ensureCollection();
   const response = await request("POST", `/collections/${collection}/points/delete?wait=true`, {
     filter: { must: [{ key: field, match: { value: id } }] },

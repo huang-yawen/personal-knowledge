@@ -8,7 +8,9 @@
     "start": "tsx --env-file=.env src/index.ts",
     "migrate": "tsx --env-file=.env src/migrate.ts",
     "invite": "tsx --env-file=.env src/scripts/invite.ts",
+    "reindex": "tsx --env-file=.env src/scripts/reindex.ts",
     "reset-password": "tsx --env-file=.env src/scripts/reset-password.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
