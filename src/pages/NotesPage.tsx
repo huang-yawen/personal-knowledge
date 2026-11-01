@@ -12,6 +12,7 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
+import { MarkdownView } from "@/components/MarkdownView";
 import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
@@ -76,6 +77,8 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
   const pending = useRef<({ id: number } & NotePatch) | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   const refreshTagOptions = useCallback(() => {
     listNoteTags().then(setTagOptions).catch(console.error);
@@ -203,6 +206,40 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       setError((reason as Error).message);
     }
   };
+  // 工具栏：在选区两侧插入 Markdown 语法，没有选区时插入占位文字并选中它
+  const applyFormat = (format: (selected: string) => { text: string; selectFrom: number; selectTo: number }) => {
+    const editor = editorRef.current;
+    if (!current || !editor) return;
+    const { selectionStart: start, selectionEnd: end } = editor;
+    const result = format(current.content.slice(start, end));
+    edit({ content: current.content.slice(0, start) + result.text + current.content.slice(end) });
+    // 等内容更新后再恢复焦点和选区
+    requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(start + result.selectFrom, start + result.selectTo);
+    });
+  };
+
+  const formatBold = () =>
+    applyFormat((selected) => {
+      const inner = selected || "粗体文字";
+      return { text: `**${inner}**`, selectFrom: 2, selectTo: 2 + inner.length };
+    });
+
+  const formatList = () =>
+    applyFormat((selected) => {
+      const text = (selected || "列表项").split("\n").map((line) => `- ${line}`).join("\n");
+      return { text, selectFrom: 0, selectTo: text.length };
+    });
+
+  const formatCode = () =>
+    applyFormat((selected) => {
+      const inner = selected || "代码";
+      return inner.includes("\n")
+        ? { text: `\n\`\`\`\n${inner}\n\`\`\`\n`, selectFrom: 5, selectTo: 5 + inner.length }
+        : { text: `\`${inner}\``, selectFrom: 1, selectTo: 1 + inner.length };
+    });
+
   // 有选中文字时只处理选区，否则处理整篇
   const aiRange = current && selection.end > selection.start && selection.end <= current.content.length ? selection : null;
 
@@ -356,6 +393,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
                   </span>
                 ))}
                 <input
+                  ref={tagInputRef}
                   className="note-tag-input"
                   value={tagDraft}
                   maxLength={20}
@@ -401,26 +439,27 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
             </div>
           </header>
           <div className="editor-toolbar">
-            <button type="button" title="粗体">
+            <button type="button" title="粗体" disabled={isPreview} onClick={formatBold}>
               <Bold size={16} />
             </button>
-            <button type="button" title="列表">
+            <button type="button" title="列表" disabled={isPreview} onClick={formatList}>
               <List size={16} />
             </button>
-            <button type="button" title="代码">
+            <button type="button" title="代码" disabled={isPreview} onClick={formatCode}>
               <Code2 size={16} />
             </button>
             <span />
-            <button type="button" title="插入标签">
+            <button type="button" title="添加标签" onClick={() => tagInputRef.current?.focus()}>
               <Tag size={16} />
             </button>
           </div>
           {isPreview ? (
             <article className="markdown-preview">
-              <MarkdownPreview content={current.content} />
+              <MarkdownView content={current.content} />
             </article>
           ) : (
             <textarea
+              ref={editorRef}
               className="note-editor"
               value={current.content}
               placeholder="开始记录你的想法…"
@@ -484,7 +523,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
                 </details>
               )}
               <div className="ai-draft-content">
-                <MarkdownPreview content={draft.result} />
+                <MarkdownView content={draft.result} />
               </div>
               <div className="ai-draft-actions">
                 <button type="button" onClick={() => setAiDraft(null)}>
@@ -524,29 +563,5 @@ function EyeIcon() {
       <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
       <circle cx="12" cy="12" r="2.5" />
     </svg>
-  );
-}
-
-function MarkdownPreview({ content }: { content: string }) {
-  return (
-    <>
-      {content
-        .split("\n")
-        .map((line, index) =>
-          line.startsWith("# ") ? (
-            <h1 key={`${line}-${index}`}>{line.slice(2)}</h1>
-          ) : line.startsWith("## ") ? (
-            <h2 key={`${line}-${index}`}>{line.slice(3)}</h2>
-          ) : line.startsWith("- ") ? (
-            <li key={`${line}-${index}`}>{line.slice(2)}</li>
-          ) : line.startsWith("> ") ? (
-            <blockquote key={`${line}-${index}`}>{line.slice(2)}</blockquote>
-          ) : line ? (
-            <p key={`${line}-${index}`}>{line.replaceAll("**", "")}</p>
-          ) : (
-            <br key={`empty-${index}`} />
-          ),
-        )}
-    </>
   );
 }
