@@ -499,3 +499,5 @@
 .admin-actions button:hover { background: var(--hover); }
 .admin-tag { margin-left: 6px; padding: 2px 8px; border-radius: 10px; background: var(--hover); color: var(--muted); font-size: 12px; }
 .admin-tag.unused { background: var(--blue-soft); color: var(--blue); }
+
+.file-type.docx { color: var(--accent-blue); background: rgba(0, 122, 255, .1); }
