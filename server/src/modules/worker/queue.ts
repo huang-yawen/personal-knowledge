@@ -7,6 +7,7 @@ import { recordActivity } from "../activity/repository";
 import { embedTexts } from "../rag/embedding";
 import { deleteVectors, upsertPoints } from "../rag/qdrant";
 import { chunkText } from "./chunk";
+import { runAsUser } from "../auth/context";
 import { parseFile } from "./parse";
 import { summarizeDocument } from "./summary";
 
@@ -50,7 +51,10 @@ const processDocument = async (id: number) => {
 
   try {
     await setStatus(id, "parsing");
-    const pages = await parseFile(path.join(config.uploadDir, doc.stored_path), doc.mime_type);
+    // OCR 要按用户记账和判断额度，所以放进用户上下文里解析
+    const pages = await runAsUser(doc.user_id as number, () =>
+      parseFile(path.join(config.uploadDir, doc.stored_path), doc.mime_type),
+    );
 
     // 分块不跨页，保证每个块的页码准确
     const values: (number | string | null)[][] = [];

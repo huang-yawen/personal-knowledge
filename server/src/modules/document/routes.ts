@@ -10,7 +10,7 @@ import { parseId } from "../knowledge-base/routes";
 import { recordActivity } from "../activity/repository";
 import { removeDocument } from "./remove";
 import { enqueue } from "../worker/queue";
-import { DOCX_MIME, stripPdfPrefix } from "../worker/parse";
+import { DOCX_MIME, IMAGE_MIMES, sniffImageMime, stripPdfPrefix } from "../worker/parse";
 import { currentUserId, type AuthedRequest } from "../auth/context";
 
 // 只信扩展名，MIME 由服务端按扩展名确定，不使用客户端传来的值
@@ -19,6 +19,7 @@ const fileTypes: Record<string, { label: string; mime: string }> = {
   ".txt": { label: "TXT", mime: "text/plain" },
   ".md": { label: "MD", mime: "text/markdown" },
   ".docx": { label: "DOCX", mime: DOCX_MIME },
+  ...Object.fromEntries(Object.entries(IMAGE_MIMES).map(([ext, mime]) => [ext, { label: "图片", mime }])),
 };
 
 class HttpError extends Error {
@@ -71,7 +72,7 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ext in fileTypes) cb(null, true);
-    else cb(new HttpError(400, "仅支持 PDF、Word（.docx）、TXT、Markdown 文件"));
+    else cb(new HttpError(400, "仅支持 PDF、Word（.docx）、图片（png / jpg / webp）、TXT、Markdown 文件"));
   },
 });
 
@@ -154,6 +155,21 @@ documentRouter.post("/knowledge-bases/:id/documents", async (req, res) => {
   }
 
   const ext = path.extname(file.originalname).toLowerCase();
+  if (ext in IMAGE_MIMES) {
+    // 图片要 OCR，单张上限更小；并按文件头确认真的是图片，且与扩展名对应的类型一致
+    const handle = await open(file.path, "r");
+    const header = Buffer.alloc(16);
+    await handle.read(header, 0, header.length, 0);
+    await handle.close();
+    if (file.size > config.ocr.maxImageBytes || sniffImageMime(header) !== IMAGE_MIMES[ext]) {
+      await discard(file);
+      const tooBig = file.size > config.ocr.maxImageBytes;
+      res.status(tooBig ? 413 : 400).json({
+        error: tooBig ? `图片不能超过 ${config.ocr.maxImageBytes / 1024 / 1024}MB` : "文件内容不是有效的图片，或与扩展名不符",
+      });
+      return;
+    }
+  }
   if (ext === ".pdf" || ext === ".docx") {
     // 扩展名可以伪造，再检查文件头：PDF 的 %PDF- 可出现在前 1024 字节内，docx 是 zip，以 PK 开头
     const handle = await open(file.path, "r");

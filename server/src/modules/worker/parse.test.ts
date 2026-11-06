@@ -7,11 +7,12 @@ import { DOCX_MIME, parseFile, stripPdfPrefix } from "./parse";
 
 // 手工构造的最小单页 PDF（Helvetica，文字 Hello PDF）
 const buildPdf = () => {
+  const content = "BT /F1 12 Tf 10 50 Td (Hello PDF, this sentence has enough characters to count as text.) Tj ET";
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-    "<< /Length 40 >>\nstream\nBT /F1 18 Tf 20 50 Td (Hello PDF) Tj ET\nendstream",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 100] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
   let body = "%PDF-1.4\n";

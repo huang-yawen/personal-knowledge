@@ -26,6 +26,13 @@ export const config = {
     baseUrl: required("DEEPSEEK_BASE_URL").replace(/\/+$/, ""),
     model: required("DEEPSEEK_MODEL"),
   },
+  // 图片 / 扫描件 OCR：复用硅基流动的密钥，主模型出错或返回空时用备用模型再试一次
+  ocr: {
+    model: process.env.OCR_MODEL ?? "Qwen/Qwen3-VL-8B-Instruct",
+    fallbackModel: process.env.OCR_FALLBACK_MODEL ?? "Qwen/Qwen3-VL-32B-Instruct",
+    maxPdfPages: numberEnv("OCR_MAX_PDF_PAGES", 30),
+    maxImageBytes: 10 * 1024 * 1024,
+  },
   retrieval: { topK: 5 },
   chat: { maxHistoryMessages: 10, maxAnswerTokens: 2000, maxMessageChars: 4000 },
   qdrant: {
