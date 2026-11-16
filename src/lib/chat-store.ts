@@ -74,7 +74,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       })),
       threadKey: state.threadKey + 1,
     }));
-  },
+  },  
   newConversation: () =>
     set((state) => ({ conversationId: null, sources: [], initialMessages: [], threadKey: state.threadKey + 1 })),
   patchConversation: async (id, patch) => {
