@@ -22,14 +22,11 @@ import {
   type StatsDto,
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { useThemeStore } from "@/lib/theme-store";
+import { errorMessage } from "@/lib/utils";
 
-export function ProfilePage({
-  isDark,
-  onThemeChange,
-}: {
-  isDark: boolean;
-  onThemeChange: (value: boolean) => void;
-}) {
+export function ProfilePage() {
+  const { isDark, setDark } = useThemeStore();
   const [activeSection, setActiveSection] = useState<
     "profile" | "ai" | "system" | "usage"
   >("profile");
@@ -82,14 +79,14 @@ export function ProfilePage({
                   <button
                     type="button"
                     className={!isDark ? "selected" : ""}
-                    onClick={() => onThemeChange(false)}
+                    onClick={() => setDark(false)}
                   >
                     浅色
                   </button>
                   <button
                     type="button"
                     className={isDark ? "selected" : ""}
-                    onClick={() => onThemeChange(true)}
+                    onClick={() => setDark(true)}
                   >
                     深色
                   </button>
@@ -215,7 +212,7 @@ function AccountSection() {
     try {
       setMessage({ text: await task(), isError: false });
     } catch (reason) {
-      setMessage({ text: (reason as Error).message, isError: true });
+      setMessage({ text: errorMessage(reason), isError: true });
     } finally {
       setBusy(false);
     }
@@ -326,7 +323,7 @@ function AiSettings() {
     try {
       setSettings(await saveSettings(next));
     } catch (reason) {
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
     }
   };
 
@@ -448,7 +445,7 @@ function ExportButton() {
       URL.revokeObjectURL(url);
       setState({ busy: false, error: "" });
     } catch (reason) {
-      setState({ busy: false, error: (reason as Error).message });
+      setState({ busy: false, error: errorMessage(reason) });
     }
   };
   return (

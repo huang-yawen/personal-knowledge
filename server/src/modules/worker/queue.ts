@@ -97,11 +97,16 @@ const processDocument = async (id: number) => {
   } catch (error) {
     console.error(`文档 ${id} 处理失败`, error);
     const message = error instanceof Error ? error.message : String(error);
-    await pool.query("UPDATE documents SET status = 'failed', error_message = ? WHERE id = ?", [
-      message.slice(0, 1000),
-      id,
-    ]);
-    await recordActivity(doc.user_id, "doc_failed", doc.original_name, id);
+    try {
+      await pool.query("UPDATE documents SET status = 'failed', error_message = ? WHERE id = ?", [
+        message.slice(0, 1000),
+        id,
+      ]);
+      await recordActivity(doc.user_id, "doc_failed", doc.original_name, id);
+    } catch (markError) {
+      // 数据库不可用时连“标记失败”都会失败：留着 parsing 状态，重启后 resumeQueue 会重新排队
+      console.error(`文档 ${id} 标记失败状态时出错`, markError);
+    }
   }
 };
 
@@ -110,7 +115,15 @@ const drain = async () => {
   if (running) return;
   running = true;
   try {
-    for (let id = pending.shift(); id !== undefined; id = pending.shift()) await processDocument(id);
+    for (let id = pending.shift(); id !== undefined; id = pending.shift()) {
+      try {
+        await processDocument(id);
+      } catch (error) {
+        // processDocument 内部已兜底，这里防的是兜底自身失败（如数据库不可用）；
+        // 不吞掉异常会让 drain 拒绝、后续文档永远停在队列里
+        console.error(`文档 ${id} 处理流程异常，继续处理队列中的下一份`, error);
+      }
+    }
   } finally {
     running = false;
   }

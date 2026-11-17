@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createNote, generateNote, type NoteDto, type NoteSourceInput } from "@/lib/api";
 import { MarkdownView } from "@/components/MarkdownView";
+import { errorMessage } from "@/lib/utils";
 
 type Draft = { title: string; content: string; sources: NoteSourceInput[] };
 
@@ -19,7 +20,7 @@ export function NoteGenerateDialog({ onClose, onSaved }: { onClose: () => void; 
       setDraft(await generateNote(topic.trim()));
     } catch (reason) {
       setDraft(null);
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -32,7 +33,7 @@ export function NoteGenerateDialog({ onClose, onSaved }: { onClose: () => void; 
     try {
       onSaved(await createNote(draft));
     } catch (reason) {
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
       setBusy(false);
     }
   };

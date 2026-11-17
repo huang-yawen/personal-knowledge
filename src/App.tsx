@@ -1,51 +1,39 @@
-import { useEffect, useState, type ComponentType } from "react";
-import { ChevronLeft, ChevronRight, FileText, Grid2X2, LibraryBig, Menu, MessageSquareText, Moon, MoreHorizontal, Settings2, ShieldCheck, Sparkles, Sun, UserRound, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, Menu, Moon, MoreHorizontal, Settings2, Sparkles, Sun, X } from "lucide-react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import "./shell.css";
 import "./theme.css";
-import { Dashboard } from "@/pages/Dashboard";
-import { ChatPage } from "@/pages/ChatPage";
-import { KnowledgePage } from "@/pages/KnowledgePage";
-import { NotesPage } from "@/pages/NotesPage";
-import { ProfilePage } from "@/pages/ProfilePage";
-import { AdminPage } from "@/pages/AdminPage";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ConversationList } from "@/components/ConversationList";
+import { ADMIN_NAV_ITEM, APP_NAME, NAV_ITEMS, findNavItem } from "@/lib/nav";
 import { getSettings } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
+import { useThemeStore } from "@/lib/theme-store";
 
-type NavItem = {
-  label: string;
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
-};
-
-const navItems: NavItem[] = [
-  { label: "工作台", icon: Grid2X2 },
-  { label: "AI 对话", icon: MessageSquareText },
-  { label: "我的知识库", icon: LibraryBig },
-  { label: "我的笔记", icon: FileText },
-  { label: "个人中心", icon: UserRound },
-];
-
+// 应用壳：侧栏 + 主内容区。当前页面由路由决定，页面本身在 <Outlet /> 里渲染
 function App() {
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeNav, setActiveNav] = useState("工作台");
   const displayName = useAuthStore((state) => state.user?.displayName ?? "");
   const isAdmin = useAuthStore((state) => state.user?.isAdmin ?? false);
-  // 管理入口只对管理员显示（后端接口另有校验）
-  const visibleNavItems = isAdmin ? [...navItems, { label: "管理", icon: ShieldCheck }] : navItems;
+  const isDark = useThemeStore((state) => state.isDark);
+  const toggleTheme = useThemeStore((state) => state.toggle);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
 
+  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
+  const currentNav = findNavItem(pathname);
+  // 对话历史只属于对话页，放在侧栏里跟着对话页出现（用匹配结果判断，兼容 /chat/ 这种带尾斜杠的地址）
+  const showConversations = currentNav?.path === "/chat";
+
+  // 标签页标题跟着路由走
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDark);
-  }, [isDark]);
+    document.title = currentNav ? `${currentNav.title} · ${APP_NAME}` : APP_NAME;
+  }, [currentNav]);
 
   // 登录后应用个人中心里设置的默认知识库范围；读取失败就保持“全部知识库”
   useEffect(() => {
@@ -60,7 +48,7 @@ function App() {
   const openNote = (id: number) => {
     useNoteNavStore.getState().request(id);
     useReaderStore.getState().close();
-    setActiveNav("我的笔记");
+    navigate("/notes");
     setIsSidebarOpen(false);
   };
 
@@ -71,16 +59,9 @@ function App() {
     chat.setKnowledgeBaseIds([knowledgeBaseId]);
     chat.setPendingQuestion(question);
     useReaderStore.getState().close();
-    setActiveNav("AI 对话");
+    navigate("/chat");
     setIsSidebarOpen(false);
   };
-
-  const changeTheme = (dark: boolean) => {
-    setIsDark(dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  };
-
-  const isBleed = activeNav === "AI 对话" || activeNav === "我的知识库" || activeNav === "我的笔记";
 
   return (
     <div className={`app-shell${isCollapsed ? " sidebar-collapsed" : ""}`}>
@@ -105,27 +86,28 @@ function App() {
         </div>
 
         <nav className="nav-list">
-          {visibleNavItems.map(({ label, icon: Icon }) => (
-            <button
-              className={`nav-item${activeNav === label ? " active" : ""}`}
-              type="button"
-              key={label}
-              onClick={() => { setActiveNav(label); setIsSidebarOpen(false); }}
+          {navItems.map(({ path, label, icon: Icon }) => (
+            <NavLink
+              key={path}
+              to={path}
+              end={path === "/"}
+              className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+              onClick={() => setIsSidebarOpen(false)}
             >
               <Icon size={19} strokeWidth={1.8} />
               <span>{label}</span>
-            </button>
+            </NavLink>
           ))}
         </nav>
 
-        {activeNav === "AI 对话" && <ConversationList onPick={() => setIsSidebarOpen(false)} onOpenNote={openNote} />}
+        {showConversations && <ConversationList onPick={() => setIsSidebarOpen(false)} onOpenNote={openNote} />}
 
         <div className="sidebar-bottom">
-          <button className="nav-item" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={() => changeTheme(!isDark)}>
+          <button className="nav-item" type="button" aria-label={isDark ? "切换至浅色模式" : "切换至深色模式"} onClick={toggleTheme}>
             {isDark ? <Sun size={19} strokeWidth={1.8} /> : <Moon size={19} strokeWidth={1.8} />}
             <span>{isDark ? "浅色模式" : "深色模式"}</span>
           </button>
-          <button className="nav-item" type="button" onClick={() => setActiveNav("个人中心")}>
+          <button className="nav-item" type="button" onClick={() => { navigate("/profile"); setIsSidebarOpen(false); }}>
             <Settings2 size={19} strokeWidth={1.8} />
             <span>设置</span>
           </button>
@@ -140,13 +122,7 @@ function App() {
       {isSidebarOpen && <button className="sidebar-scrim" type="button" aria-label="关闭导航菜单" onClick={() => setIsSidebarOpen(false)} />}
 
       <main className="main-content">
-        {isBleed ? (
-          <div className="page-bleed">{activeNav === "AI 对话" ? <ChatPage /> : activeNav === "我的知识库" ? <KnowledgePage /> : <NotesPage onNavigate={setActiveNav} />}</div>
-        ) : (
-          <div className="page-scroll">
-            {activeNav === "工作台" ? <Dashboard onNavigate={setActiveNav} /> : activeNav === "个人中心" ? <ProfilePage isDark={isDark} onThemeChange={changeTheme} /> : activeNav === "管理" && isAdmin ? <AdminPage /> : <PlaceholderPage page={activeNav} />}
-          </div>
-        )}
+        <Outlet />
       </main>
 
       <DocumentReader onOpenNote={openNote} onAsk={askQuestion} />
@@ -156,10 +132,6 @@ function App() {
       </button>
     </div>
   );
-}
-
-function PlaceholderPage({ page }: { page: string }) {
-  return <div className="placeholder-page"><span className="placeholder-icon"><Sparkles size={25} /></span><p className="section-kicker">正在构建</p><h2>{page}</h2><p>该模块将按照既定设计规范在下一阶段接入。</p></div>;
 }
 
 export default App;

@@ -9,8 +9,10 @@ import {
   parseIdList,
   parseOptionalId,
   retrieveChunks,
+  type RetrievalStats,
   type RetrievedChunk,
 } from "../rag/retrieve";
+import { buildRetrievalQuery } from "../rag/query";
 import {
   conversationExists,
   createConversation,
@@ -195,6 +197,11 @@ chatRouter.post("/", async (req, res) => {
 
   const startedAt = Date.now();
   const question = messages[messages.length - 1].content.trim();
+  // 检索用的查询串：追问会拼上上一轮的问题，可能与用户原话不同（只影响检索，发给模型的仍是原话）
+  let retrievalQuery = question;
+  // 实际进入提示词的相似度，用来标定相关性下限
+  let scores: number[] = [];
+  const retrievalStats: RetrievalStats = { candidates: 0, filtered: 0 };
   let hits = 0;
   let topScore: number | undefined;
   let usage: Usage | undefined;
@@ -212,13 +219,20 @@ chatRouter.post("/", async (req, res) => {
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
     const settings = await getSettings();
+    // 追问（“它有什么优点”“第二点展开说说”）单独去做向量检索没有主语，先拼上上一轮的问题
+    retrievalQuery = buildRetrievalQuery(question, messages.slice(0, -1));
     const retrievalStartedAt = Date.now();
-    const chunks = await retrieveChunks(question, { knowledgeBaseIds, limit: settings.topK }).catch((error: unknown) => {
+    const chunks = await retrieveChunks(retrievalQuery, {
+      knowledgeBaseIds,
+      limit: settings.topK,
+      stats: retrievalStats,
+    }).catch((error: unknown) => {
       console.error("检索失败", error);
       throw new ModelError(describeRetrievalError(error));
     });
     retrievalMs = Date.now() - retrievalStartedAt;
     hits = chunks.length;
+    scores = chunks.map((chunk) => Number(chunk.score.toFixed(3)));
     topScore = chunks[0]?.score;
     const instructions = await loadInstructions(knowledgeBaseIds, chunks);
     const retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
@@ -260,8 +274,14 @@ chatRouter.post("/", async (req, res) => {
         event: "chat",
         knowledgeBaseIds,
         questionChars: question.length,
+        // 是否拼接了上一轮问题（追问）；检索命中数和分数用来标定 RETRIEVAL_MIN_SCORE
+        rewritten: retrievalQuery !== question,
+        candidates: retrievalStats.candidates,
+        filtered: retrievalStats.filtered,
         hits,
+        scores,
         topScore: topScore === undefined ? null : Number(topScore.toFixed(3)),
+        minScore: config.retrieval.minScore,
         model: config.deepseek.model,
         usage: usage ?? null,
         aborted: controller.signal.aborted,

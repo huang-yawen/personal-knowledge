@@ -21,6 +21,19 @@ export const describeRetrievalError = (error: unknown) =>
     ? "嵌入服务请求失败，请检查网络后重试"
     : "检索资料失败，请确认向量库（Qdrant）和数据库已启动后重试";
 
+// 丢弃相似度低于下限的命中。宁可少给几条资料，也不要让模型拿不相关的内容硬凑答案；
+// minScore 为 0 或负数表示不启用过滤。返回数量供调用方记录日志
+export const filterByScore = <T extends { score: number }>(hits: T[], minScore: number): T[] =>
+  minScore > 0 ? hits.filter((hit) => hit.score >= minScore) : hits;
+
+// 检索过程的统计，由调用方传入并填充，用于日志和标定相似度下限
+export type RetrievalStats = {
+  // 向量检索命中的条数（过滤前）
+  candidates: number;
+  // 因为低于相似度下限被丢弃的条数
+  filtered: number;
+};
+
 // 请求里的可选 id（如知识库范围）：不传或 null 表示未指定；非法值返回 "invalid"
 export const parseOptionalId = (value: unknown): number | undefined | "invalid" => {
   if (value === undefined || value === null) return undefined;
@@ -45,26 +58,32 @@ export const ownsKnowledgeBases = async (ids: number[]) => {
   return rows.length === ids.length;
 };
 
-// 向量检索命中后，以 MySQL 中的分块为准取正文；已被删除但向量残留的分块会被自然丢弃
+// 向量检索命中后，以 MySQL 中的分块为准取正文；已被删除但向量残留的分块会被自然丢弃。
+// 先按相似度下限过滤再取正文：Qdrant 返回的分数是从高到低排的，所以只取前 limit 条再过滤不会漏掉更高分的
 export const retrieveChunks = async (
   query: string,
-  options: { knowledgeBaseIds?: number[]; limit?: number } = {},
+  options: { knowledgeBaseIds?: number[]; limit?: number; minScore?: number; stats?: RetrievalStats } = {},
 ): Promise<RetrievedChunk[]> => {
   const [vector] = await embedTexts([query]);
   const hits = await searchPoints(vector, {
     knowledgeBaseIds: options.knowledgeBaseIds,
     limit: options.limit ?? config.retrieval.topK,
   });
-  if (hits.length === 0) return [];
+  const kept = filterByScore(hits, options.minScore ?? config.retrieval.minScore);
+  if (options.stats) {
+    options.stats.candidates = hits.length;
+    options.stats.filtered = hits.length - kept.length;
+  }
+  if (kept.length === 0) return [];
 
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT c.id, c.knowledge_base_id, c.document_id, c.content, c.page_number, d.original_name
      FROM document_chunks c JOIN documents d ON d.id = c.document_id
      WHERE c.id IN (?) AND c.user_id = ?`,
-    [hits.map((hit) => hit.payload.chunk_id), currentUserId()],
+    [kept.map((hit) => hit.payload.chunk_id), currentUserId()],
   );
   const byId = new Map(rows.map((row) => [row.id as number, row]));
-  return hits.flatMap((hit) => {
+  return kept.flatMap((hit) => {
     const row = byId.get(hit.payload.chunk_id);
     if (!row) return [];
     return [

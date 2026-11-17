@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bold,
   Check,
@@ -20,6 +21,7 @@ import { NoteGenerateDialog } from "@/components/NoteGenerateDialog";
 import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
+import { errorMessage } from "@/lib/utils";
 import {
   addNoteToKnowledgeBase,
   createNote,
@@ -64,7 +66,8 @@ type AiDraft = { noteId: number; action: NoteAiAction; result: string; original:
 
 const toListItem = (note: NoteDto): NoteListItemDto => ({ ...note, preview: note.content.slice(0, 200) });
 
-export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void }) {
+export function NotesPage() {
+  const navigate = useNavigate();
   const [notes, setNotes] = useState<NoteListItemDto[]>([]);
   const [current, setCurrent] = useState<NoteDto | null>(null);
   const [query, setQuery] = useState("");
@@ -172,7 +175,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       useReaderStore.getState().open(source.refId, source.chunkId ?? undefined);
       return;
     }
-    useChatStore.getState().openConversation(source.refId).then(() => onNavigate("AI 对话")).catch((reason: Error) => setError(reason.message));
+    useChatStore.getState().openConversation(source.refId).then(() => navigate("/chat")).catch((reason: Error) => setError(reason.message));
   };
 
   const openKbMenu = () => {
@@ -192,7 +195,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       const updated = await addNoteToKnowledgeBase(current.id, knowledgeBaseId);
       setCurrent((open) => (open && open.id === updated.id ? { ...open, knowledgeBase: updated.knowledgeBase } : open));
     } catch (reason) {
-      setKbError((reason as Error).message);
+      setKbError(errorMessage(reason));
     } finally {
       setKbBusy(false);
     }
@@ -206,7 +209,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       const updated = await removeNoteFromKnowledgeBase(current.id);
       setCurrent((open) => (open && open.id === updated.id ? { ...open, knowledgeBase: updated.knowledgeBase } : open));
     } catch (reason) {
-      setKbError((reason as Error).message);
+      setKbError(errorMessage(reason));
     } finally {
       setKbBusy(false);
     }
@@ -242,7 +245,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       setSelection({ start: 0, end: 0 });
       setSaveState("saved");
     } catch (reason) {
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
     }
   };
 
@@ -272,7 +275,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
     try {
       await showCreated(await createNote());
     } catch (reason) {
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
     }
   };
 
@@ -286,7 +289,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       setCurrent(null);
       setSaveState("saved");
     } catch (reason) {
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
     }
   };
   // 工具栏：在选区两侧插入 Markdown 语法，没有选区时插入占位文字并选中它
@@ -340,7 +343,7 @@ export function NotesPage({ onNavigate }: { onNavigate: (label: string) => void 
       const { result } = await runNoteAi(action, original);
       setAiDraft({ noteId: current.id, action, result, original, range: aiRange });
     } catch (reason) {
-      setAiError((reason as Error).message);
+      setAiError(errorMessage(reason));
     } finally {
       setAiBusy(false);
     }

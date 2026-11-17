@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- 前端：React 19 + TypeScript + Vite + Tailwind CSS 4 + shadcn/ui（Base UI）+ assistant-ui + zustand
+- 前端：React 19 + TypeScript + Vite + Tailwind CSS 4 + shadcn/ui（Base UI）+ assistant-ui + zustand + react-router
 - 后端（`server/`）：Express 5 + MySQL + Qdrant；Embedding 走 OpenAI 兼容接口，对话模型为 DeepSeek
 
 ## 开发
@@ -21,6 +21,8 @@ pnpm dev      # 启动开发服务器
 pnpm build    # 类型检查并构建
 pnpm lint     # oxlint 检查
 ```
+
+提交到 `main` 或发起 PR 后，GitHub Actions（`.github/workflows/ci.yml`）会自动执行前端 lint/build 与后端 typecheck/test。
 
 ## 后端
 
@@ -46,6 +48,20 @@ npm run reindex                             # 按数据库中的分块重建 Qdr
 
 `.env` 含密钥，不要提交到版本库。前端开发服务器通过 `/api` 访问后端（`vite.config.ts` 中 `changeOrigin` 必须为 false，否则后端的同源校验会拒绝登录）。
 
+### 检索调优
+
+问答的检索结果有两个可调点：
+
+- **多轮追问**：`"它有什么优点"`、`"第二点展开说说"` 这类脱离上文没有主语的问题，会先把上一轮的用户提问拼进检索查询（`server/src/modules/rag/query.ts`）。只影响检索，发给模型的仍是用户原话。
+- **相似度下限** `RETRIEVAL_MIN_SCORE`：低于该分数的资料不会进入提示词，`0` 表示不过滤。
+
+标定方法：问答日志（`journalctl -u personal-knowledge -o cat | grep '"event":"chat"'`）每条都有 `scores`（本次实际分数）、`hits`（进入提示词的条数）、`candidates`（检索命中数）、`filtered`（被下限丢弃的条数）。拿几个你已知「库里确实没有」和「库里确实有」的问题各问一次，把下限定在两组分数之间。也可以直接调检索接口对比：
+
+```bash
+curl -s localhost:3001/api/rag/search -H 'Content-Type: application/json' \
+  -d '{"query":"你的问题","minScore":0}'   # minScore 传 0 可关掉过滤，看完整分数
+```
+
 ## 部署
 
 推荐结构：nginx 托管前端构建产物并反代 `/api`；后端和 Qdrant 只监听 127.0.0.1；MySQL 不对外。`deploy/` 下有可直接修改使用的模板：
@@ -60,6 +76,7 @@ npm run reindex                             # 按数据库中的分块重建 Qdr
 要点：
 
 - 反代必须原样传递 `Host`（后端按它做同源校验），并设置 `X-Forwarded-Proto`（后端已 `trust proxy` 回环地址，Cookie 才会带 `Secure`）。必须用 HTTPS。
+- 前端是单页应用：`/chat`、`/notes` 这类页面地址由前端路由处理，静态服务器必须把未命中的路径回退到 `index.html`（模板里是 `try_files $uri /index.html`），否则刷新或直接访问这些地址会 404。
 - 前端：本机 `pnpm build`，把 `dist/` 上传到服务器；后端：上传 `server/`（不含 `node_modules`、`.env`、`uploads`），`npm ci` 后 `systemctl restart personal-knowledge`；有新迁移时先 `npm run migrate`。
 - 不要把 Qdrant（6333/6334）和 MySQL（3306）绑定到公网。若用 Docker 运行 Qdrant，端口映射写成 `127.0.0.1:6333:6333`。
 - 内存紧张的小机器建议加 swap；两个 systemd 服务都设了 `MemoryMax`。

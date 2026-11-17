@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type MouseEvent } from "react";
 import { ArrowRight, BookOpen, Eye, EyeOff, Link2, ShieldCheck } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
+import { errorMessage } from "@/lib/utils";
 
 // 品牌标记：圆环 + 四角星
 function LogoMark() {
@@ -38,7 +39,7 @@ export function AuthPage() {
         await signIn(form.username.trim(), form.password);
       }
     } catch (reason) {
-      setError((reason as Error).message);
+      setError(errorMessage(reason));
       setBusy(false);
     }
   };

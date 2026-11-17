@@ -23,6 +23,17 @@ import { accountRouter } from "./modules/account/routes";
 import { adminRouter } from "./modules/admin/routes";
 
 const app = express();
+
+// 进程级兜底：unhandledRejection 只记日志不退出（队列等异步流程已逐条兜底，单个失败不该拖垮服务）；
+// uncaughtException 后状态不可信，记录后主动退出，交给 systemd 自动重启
+process.on("unhandledRejection", (reason) => {
+  console.error(JSON.stringify({ event: "unhandledRejection", error: reason instanceof Error ? reason.stack : String(reason) }));
+});
+process.on("uncaughtException", (error) => {
+  console.error(JSON.stringify({ event: "uncaughtException", error: error.stack }));
+  process.exit(1);
+});
+
 // 部署在本机 nginx 之后：信任回环代理，req.secure / req.ip 才能反映真实请求
 app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "1mb" }));

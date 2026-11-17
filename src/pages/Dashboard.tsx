@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CircleAlert, FolderPlus, MessageSquarePlus, RotateCw, Upload } from "lucide-react";
 import {
   getOverview,
@@ -14,8 +15,6 @@ import { useChatStore } from "@/lib/chat-store";
 import { useAuthStore } from "@/lib/auth-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
-
-type DashboardProps = { onNavigate: (page: string) => void };
 
 const PAGE_SIZE = 30;
 
@@ -49,7 +48,8 @@ const groupByMonth = (items: ActivityDto[]) => {
   return groups;
 };
 
-export function Dashboard({ onNavigate }: DashboardProps) {
+export function Dashboard() {
+  const navigate = useNavigate();
   const displayName = useAuthStore((state) => state.user?.displayName ?? "");
   const [overview, setOverview] = useState<OverviewDto | null>(null);
   const [conversations, setConversations] = useState<ConversationDto[]>([]);
@@ -90,25 +90,25 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   const goConversation = (id: number) => {
     openConversation(id)
-      .then(() => onNavigate("AI 对话"))
+      .then(() => navigate("/chat"))
       .catch((reason: Error) => setError(reason.message));
   };
 
-  // 点击轨迹：处理完成的文档打开阅读，对话回到对话，其余去知识库
+  // 点击轨迹：处理完成的文档打开阅读，对话回到对话，笔记跳到笔记页，其余去知识库
   const openActivity = (item: ActivityDto) => {
     if (item.type === "conversation_started" && item.refId) goConversation(item.refId);
     else if (item.type === "doc_ready" && item.refId) openReader(item.refId);
     else if (item.type === "note_created" && item.refId) {
       useNoteNavStore.getState().request(item.refId);
-      onNavigate("我的笔记");
+      navigate("/notes");
     }
-    else onNavigate("我的知识库");
+    else navigate("/knowledge");
   };
 
   const stats = [
-    { label: "知识库", value: overview?.knowledgeBases, target: "我的知识库" },
-    { label: "文档", value: overview?.documents, target: "我的知识库" },
-    { label: "对话", value: overview?.conversations, target: "AI 对话" },
+    { label: "知识库", value: overview?.knowledgeBases, to: "/knowledge" },
+    { label: "文档", value: overview?.documents, to: "/knowledge" },
+    { label: "对话", value: overview?.conversations, to: "/chat" },
   ];
 
   return (
@@ -119,7 +119,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       <div className="overview-stats">
         {stats.map((item) => (
-          <button className="overview-stat" type="button" key={item.label} onClick={() => onNavigate(item.target)}>
+          <button className="overview-stat" type="button" key={item.label} onClick={() => navigate(item.to)}>
             <strong>{item.value ?? "–"}</strong>
             <span>{item.label}</span>
           </button>
@@ -127,9 +127,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       <div className="home-chips">
-        <button className="home-chip" type="button" onClick={() => onNavigate("我的知识库")}><Upload size={16} /> 上传资料</button>
-        <button className="home-chip" type="button" onClick={() => onNavigate("我的知识库")}><FolderPlus size={16} /> 创建知识库</button>
-        <button className="home-chip" type="button" onClick={() => { newConversation(); onNavigate("AI 对话"); }}>
+        <button className="home-chip" type="button" onClick={() => navigate("/knowledge")}><Upload size={16} /> 上传资料</button>
+        <button className="home-chip" type="button" onClick={() => navigate("/knowledge")}><FolderPlus size={16} /> 创建知识库</button>
+        <button className="home-chip" type="button" onClick={() => { newConversation(); navigate("/chat"); }}>
           <MessageSquarePlus size={16} /> 新建对话
         </button>
       </div>

@@ -13,6 +13,14 @@ const numberEnv = (name: string, fallback: number): number => {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 };
 
+// 0 到 1 之间的比例型环境变量（如检索相似度下限）：0 是有效值（表示不启用），非法值用默认值
+const ratioEnv = (name: string, fallback: number): number => {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 1 ? value : fallback;
+};
+
 export const config = {
   port: Number(process.env.PORT ?? 3001),
   embedding: {
@@ -33,7 +41,12 @@ export const config = {
     maxPdfPages: numberEnv("OCR_MAX_PDF_PAGES", 30),
     maxImageBytes: 10 * 1024 * 1024,
   },
-  retrieval: { topK: 5 },
+  retrieval: {
+    topK: 5,
+    // 相似度下限：低于该分数的检索结果不会进入提示词。bge-m3 的分布偏高，这个值需要用真实问题标定
+    // （问答日志里的 scores 字段记录了每次实际分数），0 表示不过滤
+    minScore: ratioEnv("RETRIEVAL_MIN_SCORE", 0.35),
+  },
   chat: { maxHistoryMessages: 10, maxAnswerTokens: 2000, maxMessageChars: 4000 },
   qdrant: {
     url: required("QDRANT_URL").replace(/\/+$/, ""),

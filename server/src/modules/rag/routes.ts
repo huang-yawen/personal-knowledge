@@ -9,6 +9,8 @@ ragRouter.post("/search", async (req, res) => {
   const query = typeof body.query === "string" ? body.query.trim() : "";
   const knowledgeBaseId = parseOptionalId(body.knowledgeBaseId);
   const limit = body.limit === undefined ? undefined : Number(body.limit);
+  // 相似度下限：不传则用配置值；传 0 可以关掉过滤，看到完整的分数分布，便于标定
+  const minScore = body.minScore === undefined ? undefined : Number(body.minScore);
 
   if (!query || query.length > 500) {
     res.status(400).json({ error: "查询内容不能为空，且不能超过 500 个字符" });
@@ -22,5 +24,15 @@ ragRouter.post("/search", async (req, res) => {
     res.status(400).json({ error: "limit 需要在 1 到 20 之间" });
     return;
   }
-  res.json(await retrieveChunks(query, { knowledgeBaseIds: knowledgeBaseId === undefined ? undefined : [knowledgeBaseId], limit }));
+  if (minScore !== undefined && (!Number.isFinite(minScore) || minScore < 0 || minScore > 1)) {
+    res.status(400).json({ error: "minScore 需要在 0 到 1 之间" });
+    return;
+  }
+  res.json(
+    await retrieveChunks(query, {
+      knowledgeBaseIds: knowledgeBaseId === undefined ? undefined : [knowledgeBaseId],
+      limit,
+      minScore,
+    }),
+  );
 });

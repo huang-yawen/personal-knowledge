@@ -21,6 +21,9 @@
 .nav-item { height: 36px; padding: 0 10px; gap: 10px; border-radius: 10px; font-size: 14px; color: var(--text); }
 .nav-item:hover { background: var(--hover); color: var(--text); }
 .nav-item.active { background: var(--active); color: var(--text); font-weight: 500; }
+/* 导航项现在是路由链接（<a>），去掉下划线和访问过的颜色 */
+a.nav-item { text-decoration: none; }
+a.nav-item:visited { color: var(--text); }
 .sidebar-bottom { border-top: 0; padding-top: 8px; gap: 2px; }
 .profile-button { padding: 8px 10px; border-radius: 10px; }
 .profile-button:hover { background: var(--hover); }
