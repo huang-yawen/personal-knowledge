@@ -114,6 +114,7 @@
 - 前端按路由做代码分割（`src/lib/pages.ts`）：首屏只加载工作台，对话页（assistant-ui）和笔记页（CodeMirror + react-markdown）在进入时才下载，侧栏悬停/聚焦会预取。首屏 JS 从 1947 kB（gzip 618 kB）降到约 453 kB（gzip 147 kB）。
 - 停止生成时保留已生成内容：迁移 014 给 `messages` 加 `incomplete`，中止的回答存库并标记，前端显示「已停止生成」，不再静默丢弃。
 - 长对话滚动摘要：迁移 015 给 `conversations` 加 `summary` / `summary_until_message_id`，滑出最近 10 条窗口的早期消息压缩成摘要随提示词下发，回答结束后异步刷新（`server/src/modules/conversation/summary.ts`）。
+- 前端单元测试起步：引入 vitest（node 环境、只跑纯逻辑），覆盖路由匹配、页面映射、chat-store 状态流转和错误文案，`pnpm test` 已接入 CI。组件渲染测试尚未引入。
 
 ## 6. RAG 实施原则
 

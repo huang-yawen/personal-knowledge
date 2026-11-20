@@ -19,6 +19,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # 前端单元测试（vitest，纯逻辑，node 环境）
+      - run: pnpm test
       # build 内含 tsc -b 类型检查（前端已开 strict）
       - run: pnpm build
 

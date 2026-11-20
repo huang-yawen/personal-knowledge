@@ -20,9 +20,10 @@ pnpm install
 pnpm dev      # 启动开发服务器
 pnpm build    # 类型检查并构建
 pnpm lint     # oxlint 检查
+pnpm test     # 前端单元测试（vitest，只跑纯逻辑，不需要浏览器）
 ```
 
-提交到 `main` 或发起 PR 后，GitHub Actions（`.github/workflows/ci.yml`）会自动执行前端 lint/build 与后端 typecheck/test。
+提交到 `main` 或发起 PR 后，GitHub Actions（`.github/workflows/ci.yml`）会自动执行前端 lint/test/build 与后端 typecheck/test。
 
 ## 后端
 
