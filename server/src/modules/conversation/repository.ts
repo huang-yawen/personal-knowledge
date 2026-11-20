@@ -82,10 +82,11 @@ export const syncMessages = async (conversationId: number, incoming: ChatMessage
   }
 };
 
-export const saveAssistantMessage = async (conversationId: number, content: string, citations: object[]) => {
+// incomplete 表示这条回答没有生成完（用户主动停止或关闭页面），前端会提示内容不完整
+export const saveAssistantMessage = async (conversationId: number, content: string, citations: object[], incomplete = false) => {
   await pool.query(
-    "INSERT INTO messages (user_id, conversation_id, role, content, citations) VALUES (?, ?, 'assistant', ?, ?)",
-    [currentUserId(), conversationId, content, JSON.stringify(citations)],
+    "INSERT INTO messages (user_id, conversation_id, role, content, citations, incomplete) VALUES (?, ?, 'assistant', ?, ?, ?)",
+    [currentUserId(), conversationId, content, JSON.stringify(citations), incomplete ? 1 : 0],
   );
   await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", [conversationId]);
 };

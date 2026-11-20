@@ -55,10 +55,11 @@ conversationRouter.get("/:id", async (req, res) => {
     return;
   }
   const [messages] = await pool.query<RowDataPacket[]>(
-    "SELECT id, role, content, citations FROM messages WHERE conversation_id = ? ORDER BY id",
+    "SELECT id, role, content, citations, incomplete FROM messages WHERE conversation_id = ? ORDER BY id",
     [id],
   );
-  res.json({ ...conversation, messages });
+  // MySQL 的 TINYINT 返回 0/1，转成布尔值给前端
+  res.json({ ...conversation, messages: messages.map((message) => ({ ...message, incomplete: Boolean(message.incomplete) })) });
 });
 
 // 重命名、收藏、归档。显式写 updated_at = updated_at，避免这些操作把对话顶到列表最前

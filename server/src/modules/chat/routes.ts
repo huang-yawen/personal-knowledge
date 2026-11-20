@@ -206,13 +206,16 @@ chatRouter.post("/", async (req, res) => {
   let topScore: number | undefined;
   let usage: Usage | undefined;
   let answer = "";
+  // 中止时要在这里保存已生成的内容，所以放到 try 外面
+  let activeConversationId: number | undefined;
+  let retrieved: (RetrievedChunk & { index: number })[] = [];
   // 分段耗时（毫秒），写入日志便于定位慢在检索还是生成
   let retrievalMs: number | undefined;
   let firstTokenMs: number | undefined;
   let followupMs: number | undefined;
   try {
     // 先落库：保存用户的提问，并让库里的历史与界面一致（含重新生成、编辑后重发的情况）
-    const activeConversationId =
+    activeConversationId =
       conversationId ?? (await createConversation(makeTitle(messages.find((m) => m.role === "user")?.content ?? ""), knowledgeBaseIds));
     await syncMessages(activeConversationId, messages);
     await touchConversation(activeConversationId, knowledgeBaseIds);
@@ -238,7 +241,7 @@ chatRouter.post("/", async (req, res) => {
     // 精排后第一条不一定是向量分最高的那条，所以取最大值
     topScore = scores.length > 0 ? Math.max(...scores) : undefined;
     const instructions = await loadInstructions(knowledgeBaseIds, chunks);
-    const retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
+    retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
 
     const onDelta = (text: string) => {
       firstTokenMs ??= Date.now() - startedAt;
@@ -251,7 +254,7 @@ chatRouter.post("/", async (req, res) => {
     const cited = citedIndexes(answer);
     const sources = retrieved.filter((source) => cited.has(source.index));
     writeEvent(res, { type: "sources", sources });
-    // 回答完整结束后才保存；中途停止的不入库，下次发送时界面历史会带上它
+    // 完整结束后保存；中途被停止的在 catch 里另存一份并标记为未完成
     if (answer) await saveAssistantMessage(activeConversationId, answer, sources);
     // 追问建议不入库，仅随本次回答展示
     if (answer && !controller.signal.aborted) {
@@ -266,6 +269,14 @@ chatRouter.post("/", async (req, res) => {
     if (!controller.signal.aborted) {
       console.error("问答失败", error);
       writeEvent(res, { type: "error", message: error instanceof ModelError ? error.message : "回答生成失败，请稍后重试" });
+    } else if (activeConversationId !== undefined && answer.trim()) {
+      // 用户点了停止或关掉页面：把已经生成的部分存下来并标记为未完成。
+      // 不存的话刷新后这段内容凭空消失，用户会以为白等了。
+      const cited = citedIndexes(answer);
+      const sources = retrieved.filter((source) => cited.has(source.index));
+      await saveAssistantMessage(activeConversationId, answer, sources, true).catch((saveError: unknown) =>
+        console.error("保存中止的回答失败", saveError),
+      );
     }
   } finally {
     res.end();

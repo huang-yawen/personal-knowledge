@@ -130,7 +130,14 @@ export type ConversationDto = {
 };
 
 export type ConversationDetailDto = ConversationDto & {
-  messages: { id: number; role: "user" | "assistant"; content: string; citations: ChatSource[] | null }[];
+  messages: {
+    id: number;
+    role: "user" | "assistant";
+    content: string;
+    citations: ChatSource[] | null;
+    // 用户中途停止生成，这条回答不完整
+    incomplete: boolean;
+  }[];
 };
 
 export const listConversations = (query = "", archived = false) =>

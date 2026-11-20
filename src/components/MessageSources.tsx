@@ -23,6 +23,8 @@ const STRICT_EMPTY_MARKS = ["知识库中没有找到相关内容。", "知识�
 // 依据说明由回答文字和来源推算，历史对话也能显示
 export function MessageSources() {
   const sources = useAuiState((s) => s.message.metadata.custom?.sources) as ChatSource[] | undefined;
+  // 用户中途停止生成的回答：内容不完整，不能按「已依据资料作答」来描述
+  const incomplete = useAuiState((s) => s.message.metadata.custom?.incomplete) as boolean | undefined;
   const text = useAuiState((s) => s.message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(""));
   // 最新一条回答还在生成时先不显示，避免说明随内容跳变
   const isStreaming = useAuiState((s) => s.thread.isRunning && s.message.isLast);
@@ -52,9 +54,13 @@ export function MessageSources() {
           ))}
         </div>
       )}
-      <p className="message-basis">
-        <note.Icon size={13} /> {note.text}
-      </p>
+      {incomplete ? (
+        <p className="message-incomplete">已停止生成，以上内容不完整</p>
+      ) : (
+        <p className="message-basis">
+          <note.Icon size={13} /> {note.text}
+        </p>
+      )}
     </div>
   );
 }

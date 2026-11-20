@@ -357,6 +357,8 @@ a.nav-item:visited { color: var(--text); }
 /* 回答依据说明：区分来自知识库还是通用知识 */
 .message-basis { margin-top: 8px; display: flex; align-items: flex-start; gap: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .message-basis svg { flex: none; margin-top: 2px; }
+/* 用户中途停止生成的那条回答 */
+.message-incomplete { margin-top: 8px; display: flex; align-items: center; gap: 6px; color: var(--status-pending); font-size: 12px; }
 
 /* 登录 / 注册页 */
 .auth-loading { min-height: 100dvh; display: grid; place-items: center; color: var(--muted); font-size: 14px; }

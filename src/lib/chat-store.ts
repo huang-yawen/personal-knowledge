@@ -70,7 +70,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         id: String(message.id),
         role: message.role,
         content: message.content,
-        metadata: message.citations ? { custom: { sources: message.citations } } : undefined,
+        metadata:
+          message.citations || message.incomplete
+            ? { custom: { sources: message.citations ?? [], incomplete: message.incomplete } }
+            : undefined,
       })),
       threadKey: state.threadKey + 1,
     }));
