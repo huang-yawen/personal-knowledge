@@ -73,7 +73,17 @@ export const config = {
     maxCandidates: numberEnv("RERANK_MAX_CANDIDATES", 50),
     timeoutMs: numberEnv("RERANK_TIMEOUT_MS", 5000),
   },
-  chat: { maxHistoryMessages: 10, maxAnswerTokens: 2000, maxMessageChars: 4000 },
+  chat: {
+    maxHistoryMessages: 10,
+    maxAnswerTokens: 2000,
+    maxMessageChars: 4000,
+    // 长对话滚动摘要：超出 maxHistoryMessages 的早期消息压缩成摘要，避免长对话丢失前文
+    summaryMaxChars: 800,
+    // 已有摘要后，至少要再累积这么多条待压缩消息才重新总结，避免每轮都调一次模型
+    summaryMinMessages: 6,
+    // 送进摘要模型的新增对话字数上限
+    summaryInputChars: 6000,
+  },
   qdrant: {
     url: required("QDRANT_URL").replace(/\/+$/, ""),
     collection: "personal_knowledge_chunks",

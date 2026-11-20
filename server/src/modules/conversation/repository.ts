@@ -67,6 +67,8 @@ export const syncMessages = async (conversationId: number, incoming: ChatMessage
     }
     if (common < stored.length) {
       await conn.query("DELETE FROM messages WHERE conversation_id = ? AND id >= ?", [conversationId, stored[common].id]);
+      // 删掉了消息（重新生成、编辑后重发），旧摘要可能引用了已不存在的内容，直接作废重来
+      await conn.query("UPDATE conversations SET summary = NULL, summary_until_message_id = NULL WHERE id = ?", [conversationId]);
     }
     if (common < incoming.length) {
       await conn.query("INSERT INTO messages (user_id, conversation_id, role, content) VALUES ?", [

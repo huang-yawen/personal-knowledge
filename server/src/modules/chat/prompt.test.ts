@@ -40,3 +40,15 @@ test("知识库回答指令：写入提示词，非严格和严格模式都生�
   assert.match(buildSystemPrompt([], "balanced", { instructions }), /《法律资料》：回答要引用条款/);
   assert.doesNotMatch(buildSystemPrompt([chunk], "balanced", { instructions: [] }), /知识库说明/);
 });
+
+test("此前对话摘要：写入提示词并标明不是资料；没有摘要时不出现", () => {
+  const historySummary = "用户想了解 RAG 的检索流程，已确认使用 Qdrant。";
+  const prompt = buildSystemPrompt([chunk], "balanced", { historySummary });
+  assert.match(prompt, /此前的对话摘要/);
+  assert.match(prompt, /用户想了解 RAG 的检索流程，已确认使用 Qdrant。/);
+  // 必须说明它不是资料，否则模型可能给摘要内容也标 [编号]
+  assert.match(prompt, /不是检索到的资料/);
+  assert.doesNotMatch(buildSystemPrompt([chunk]), /此前的对话摘要/);
+  // 严格模式也要带上，否则长对话在严格模式下会丢上下文
+  assert.match(buildSystemPrompt([], "balanced", { strict: true, historySummary }), /此前的对话摘要/);
+});

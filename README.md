@@ -90,6 +90,16 @@ RERANK_MIN_SCORE=0.1
 
 评估工具：`cd server && npm run eval`，读取 `server/eval/dataset.json`，输出 recall@k / MRR / 拒答率，报告写到 `server/eval/reports/`（已在 `.gitignore` 中）。
 
+### 长对话摘要
+
+发给模型的历史只保留最近 10 条消息。更早的内容会被压缩成一段摘要（`conversations.summary`），随提示词一起传下去，所以长对话不会在第 6 轮之后「忘记」前面说过什么。
+
+- **怎么触发**：每次回答结束后（不阻塞响应）检查一次——滑出窗口的消息、且还没被摘要覆盖的，累积到 6 条以上就重新合并摘要。摘要会写回对话，并记录覆盖到哪条消息（`summary_until_message_id`），下次只处理新增部分。
+- **成本**：平均每 3 轮对话多一次模型调用，计入 `usage_logs` 的 `summary` 类型。
+- **失败处理**：摘要生成失败只记日志，保留旧摘要，不影响问答。
+- **重新生成/编辑消息**会让旧摘要作废（因为它可能引用了已被删除的内容），下次重新累积。
+- 相关参数在 `server/src/config.ts` 的 `chat` 段：`maxHistoryMessages`、`summaryMinMessages`、`summaryMaxChars`、`summaryInputChars`。
+
 ## 部署
 
 推荐结构：nginx 托管前端构建产物并反代 `/api`；后端和 Qdrant 只监听 127.0.0.1；MySQL 不对外。`deploy/` 下有可直接修改使用的模板：

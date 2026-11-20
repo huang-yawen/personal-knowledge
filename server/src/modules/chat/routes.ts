@@ -2,7 +2,7 @@ import { Router, type Response } from "express";
 import type { RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
-import { currentUserId } from "../auth/context";
+import { currentUserId, runAsUser } from "../auth/context";
 import {
   describeRetrievalError,
   emptyRetrievalStats,
@@ -25,6 +25,7 @@ import {
 import { estimateTokens, recordUsage } from "../usage";
 import { getSettings, type ReplyStyle } from "../settings/repository";
 import { buildSystemPrompt, type PromptOptions } from "./prompt";
+import { loadConversationSummary, refreshConversationSummary } from "../conversation/summary";
 
 type Usage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 
@@ -163,6 +164,8 @@ export const chatRouter = Router();
 
 // 事件依次为 conversation → delta（文字片段，多次）→ sources（回答里实际引用的来源）→ followups → done；出错时发送 error
 chatRouter.post("/", async (req, res) => {
+  // 提前取一次：响应结束后刷新摘要时已经不在请求上下文里了
+  const userId = currentUserId();
   const body = (typeof req.body === "object" && req.body !== null ? req.body : {}) as Record<string, unknown>;
   const messages = parseMessages(body.messages);
   const knowledgeBaseIds = parseIdList(body.knowledgeBaseIds);
@@ -222,6 +225,8 @@ chatRouter.post("/", async (req, res) => {
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
     const settings = await getSettings();
+    // 更早的对话被压缩成的摘要：长对话里最近 N 条之外的内容靠它传下去
+    const historySummary = await loadConversationSummary(activeConversationId);
     // 追问（“它有什么优点”“第二点展开说说”）单独去做向量检索没有主语，先拼上上一轮的问题
     retrievalQuery = buildRetrievalQuery(question, messages.slice(0, -1));
     const retrievalStartedAt = Date.now();
@@ -249,7 +254,7 @@ chatRouter.post("/", async (req, res) => {
       writeEvent(res, { type: "delta", text });
     };
     // 没有检索到资料时也照常调用模型，由提示词引导它用自身知识回答
-    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, settings.replyStyle, { strict: settings.strictMode, instructions }, controller.signal, onDelta);
+    usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, settings.replyStyle, { strict: settings.strictMode, instructions, historySummary }, controller.signal, onDelta);
     // 只展示回答里真正用 [编号] 引用到的来源；模型用自身知识回答时没有来源
     const cited = citedIndexes(answer);
     const sources = retrieved.filter((source) => cited.has(source.index));
@@ -280,6 +285,14 @@ chatRouter.post("/", async (req, res) => {
     }
   } finally {
     res.end();
+    // 回答结束后按需刷新对话摘要：不阻塞本次响应，下一轮提问时就能用上。
+    // 放在响应之后是因为它要额外调一次模型，不该拖慢首字
+    const summaryConversationId = activeConversationId;
+    if (summaryConversationId !== undefined && answer.trim()) {
+      void runAsUser(userId, () => refreshConversationSummary(summaryConversationId)).catch((error: unknown) =>
+        console.error("刷新对话摘要失败", error),
+      );
+    }
     // 记账：正常结束用模型返回的 usage；中途停止拿不到时按字数估算
     if (usage || answer) recordUsage("chat", usage?.total_tokens ?? estimateTokens(question.length + answer.length));
     // 记录检索参数与用量，便于排查幻觉和成本；不记录问题和回答内容

@@ -15,6 +15,8 @@ export type PromptOptions = {
   strict?: boolean;
   // 用户给知识库设定的用途和回答要求
   instructions?: { name: string; text: string }[];
+  // 更早对话的摘要：超出历史窗口的消息被压缩成这段文字，用来维持长对话的上下文
+  historySummary?: string;
 };
 
 export const buildSystemPrompt = (chunks: RetrievedChunk[], style: ReplyStyle = "balanced", options: PromptOptions = {}) => {
@@ -22,7 +24,11 @@ export const buildSystemPrompt = (chunks: RetrievedChunk[], style: ReplyStyle = 
     options.instructions && options.instructions.length > 0
       ? `\n\n知识库说明（用户为这些知识库设定的用途和回答要求，请遵循）：\n${options.instructions.map((item) => `- 《${item.name}》：${item.text}`).join("\n")}`
       : "";
-  const tail = `${instructionHint}${STYLE_HINTS[style]}`;
+  // 明确标注这不是检索到的资料，避免模型把摘要内容当成可引用的来源
+  const summaryBlock = options.historySummary
+    ? `\n\n【此前的对话摘要】（用于理解上下文，不是检索到的资料，不要为它标注 [编号]；其中的信息可能已被后续对话修正）：\n${options.historySummary}`
+    : "";
+  const tail = `${summaryBlock}${instructionHint}${STYLE_HINTS[style]}`;
   if (options.strict) {
     if (chunks.length === 0) {
       return `你是个人知识库助手，当前为严格模式：只能依据知识库资料回答，不要使用你自己的知识。用户的知识库里没有检索到相关资料。
