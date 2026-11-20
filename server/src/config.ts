@@ -89,6 +89,9 @@ export const config = {
     collection: "personal_knowledge_chunks",
   },
   uploadDir: path.resolve(import.meta.dirname, "..", "uploads"),
+  // 大文件导出先落到磁盘再发送，避免把整份数据装进内存。
+  // 放在应用目录下而不是系统临时目录：有些机器的 /tmp 是内存盘，那样等于没省
+  tempDir: path.resolve(import.meta.dirname, "..", "tmp"),
   maxFileBytes: 20 * 1024 * 1024,
   maxDocsPerKnowledgeBase: 100,
   // 每用户的限流与额度，均可用环境变量调整

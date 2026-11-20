@@ -28,7 +28,12 @@ dist-ssr
 
 # 上传文件
 server/uploads/
+# 导出时用的临时文件（写完即删，进程残留的也可安全清理）
+server/tmp/
 # 检索评估报告（每次运行生成，不入库）
 server/eval/reports/
 # 后端密钥
 server/.env
+
+# 提交时用来传多行提交信息的临时文件
+commit-msg-tmp.txt

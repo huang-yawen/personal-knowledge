@@ -126,6 +126,7 @@ RERANK_MIN_SCORE=0.1
 - 备份：`crontab -e` 加 `30 3 * * * /opt/personal-knowledge/deploy/backup.sh >> /var/log/pk-backup.log 2>&1`。产物在 `/var/backups/personal-knowledge/`（`db-*.sql.gz`、`uploads-*.tgz`）。建议再定期拷贝一份到别的机器。
 - 恢复：`gunzip -c db-xxx.sql.gz | mysql -u... 库名`；`tar xzf uploads-xxx.tgz -C server/`；然后运行 `npm run reindex` 重建向量。
 - 向量不进备份：它可以由数据库里的分块完整重建。
+- 用户侧的「导出个人数据」（个人中心 → 系统设置）是另一个功能：只导出该账号的 JSON，不含原始文件。它现在先流式写到 `server/tmp/` 再整份发送，内存占用与账号数据量无关，不会因为数据多把后端打挂。
 
 ## 文档
 

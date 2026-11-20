@@ -115,6 +115,7 @@
 - 停止生成时保留已生成内容：迁移 014 给 `messages` 加 `incomplete`，中止的回答存库并标记，前端显示「已停止生成」，不再静默丢弃。
 - 长对话滚动摘要：迁移 015 给 `conversations` 加 `summary` / `summary_until_message_id`，滑出最近 10 条窗口的早期消息压缩成摘要随提示词下发，回答结束后异步刷新（`server/src/modules/conversation/summary.ts`）。
 - 前端单元测试起步：引入 vitest（node 环境、只跑纯逻辑），覆盖路由匹配、页面映射、chat-store 状态流转和错误文案，`pnpm test` 已接入 CI。组件渲染测试尚未引入。
+- 导出个人数据改为流式：分页读取分块与消息、边查边写到 `server/tmp/`，写完再 `res.sendFile` 发送，内存占用与账号数据量无关。原实现把全部分块读进内存再 `JSON.stringify`，在生产配置 `MemoryMax=400M` 下，大账号导出会把后端进程打挂。
 
 ## 6. RAG 实施原则
 
