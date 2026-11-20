@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "_comment": "评估集：结构示例。语料只有 4 份文档、约 2200 字，且 test.txt 与「你好」内容近乎重复，所以这里的数字只能验证工具链，不能代表真实检索水平。补充真实资料后请扩充 cases。",
+  "knowledgeBaseIds": [16, 17],
+  "cases": [
+    {
+      "id": "p01",
+      "type": "positive",
+      "question": "这个项目的向量检索用的是什么？",
+      "relevant": [{ "contains": "Qdrant" }],
+      "note": "test.txt / 架构表"
+    },
+    {
+      "id": "p02",
+      "type": "positive",
+      "question": "切块策略是怎么设计的？",
+      "relevant": [{ "contains": "可解释的切块策略" }],
+      "note": "TODO 的 RAG 实施原则"
+    },
+    {
+      "id": "p03",
+      "type": "positive",
+      "question": "每个知识库最多可以放多少个文件？",
+      "relevant": [{ "contains": "100 个文件" }],
+      "note": "文件配额"
+    },
+    {
+      "id": "p04",
+      "type": "positive",
+      "question": "Linux 里怎么查看磁盘占用？",
+      "relevant": [{ "contains": "df -h" }],
+      "note": "linux 操作手册"
+    },
+    {
+      "id": "p05",
+      "type": "positive",
+      "question": "怎么列出所有正在运行的进程？",
+      "relevant": [{ "contains": "ps aux" }],
+      "note": "linux 操作手册"
+    },
+    {
+      "id": "p06",
+      "type": "positive",
+      "question": "合作开发协议的甲方是谁？",
+      "relevant": [{ "contains": "湖南工程学院" }],
+      "note": "合作开发协议.pdf"
+    },
+    {
+      "id": "p07",
+      "type": "positive",
+      "question": "合作开发的是什么系统？",
+      "relevant": [{ "contains": "智学题库出题组卷管理系统" }],
+      "note": "合作开发协议.pdf"
+    },
+    {
+      "id": "f01",
+      "type": "followup",
+      "followupOf": "p02",
+      "question": "那它为什么还要保存原文位置？",
+      "relevant": [{ "contains": "原始文档位置的映射" }],
+      "note": "追问：脱离上文没有主语，用于验证多轮改写"
+    },
+    {
+      "id": "n01",
+      "type": "negative",
+      "question": "红烧肉的做法是什么？",
+      "relevant": [],
+      "note": "库里完全没有，必须返回 0 条"
+    },
+    {
+      "id": "n02",
+      "type": "negative",
+      "question": "股票估值应该用市盈率还是市净率？",
+      "relevant": [],
+      "note": "库里完全没有，必须返回 0 条"
+    }
+  ]
+}

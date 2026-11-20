@@ -5,11 +5,11 @@ import { pool } from "../../db";
 import { currentUserId } from "../auth/context";
 import {
   describeRetrievalError,
+  emptyRetrievalStats,
   ownsKnowledgeBases,
   parseIdList,
   parseOptionalId,
   retrieveChunks,
-  type RetrievalStats,
   type RetrievedChunk,
 } from "../rag/retrieve";
 import { buildRetrievalQuery } from "../rag/query";
@@ -201,7 +201,7 @@ chatRouter.post("/", async (req, res) => {
   let retrievalQuery = question;
   // 实际进入提示词的相似度，用来标定相关性下限
   let scores: number[] = [];
-  const retrievalStats: RetrievalStats = { candidates: 0, filtered: 0 };
+  const retrievalStats = emptyRetrievalStats();
   let hits = 0;
   let topScore: number | undefined;
   let usage: Usage | undefined;
@@ -226,6 +226,8 @@ chatRouter.post("/", async (req, res) => {
       knowledgeBaseIds,
       limit: settings.topK,
       stats: retrievalStats,
+      // 判断相关性用用户原话，而不是拼接过的检索串
+      rerankQuery: question,
     }).catch((error: unknown) => {
       console.error("检索失败", error);
       throw new ModelError(describeRetrievalError(error));
@@ -233,7 +235,8 @@ chatRouter.post("/", async (req, res) => {
     retrievalMs = Date.now() - retrievalStartedAt;
     hits = chunks.length;
     scores = chunks.map((chunk) => Number(chunk.score.toFixed(3)));
-    topScore = chunks[0]?.score;
+    // 精排后第一条不一定是向量分最高的那条，所以取最大值
+    topScore = scores.length > 0 ? Math.max(...scores) : undefined;
     const instructions = await loadInstructions(knowledgeBaseIds, chunks);
     const retrieved = chunks.map((chunk, index) => ({ index: index + 1, ...chunk }));
 
@@ -282,6 +285,12 @@ chatRouter.post("/", async (req, res) => {
         scores,
         topScore: topScore === undefined ? null : Number(topScore.toFixed(3)),
         minScore: config.retrieval.minScore,
+        // 精排：applied=实际调用了，degraded=服务不可用已退回向量排序，shadow=只记录未改变结果
+        reranked: retrievalStats.rerankApplied,
+        rerankDegraded: retrievalStats.rerankDegraded,
+        rerankShadow: config.rerank.shadow,
+        rerankMs: retrievalStats.rerankMs,
+        rerankScores: retrievalStats.rerankScores,
         model: config.deepseek.model,
         usage: usage ?? null,
         aborted: controller.signal.aborted,

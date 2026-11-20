@@ -62,6 +62,34 @@ curl -s localhost:3001/api/rag/search -H 'Content-Type: application/json' \
   -d '{"query":"你的问题","minScore":0}'   # minScore 传 0 可关掉过滤，看完整分数
 ```
 
+#### 精排（rerank）
+
+向量召回只保证「语义相近」，不保证「能回答这个问题」。开启精排后，会先召回一批候选（默认 `max(topK×4, 20)`，上限 50），再用 cross-encoder 逐条判断相关性，只把过线的交给模型。
+
+启用方式（`server/.env`）：
+
+```ini
+RERANK_ENABLED=true
+RERANK_MIN_SCORE=0.1
+```
+
+模型默认 `BAAI/bge-reranker-v2-m3`，复用 `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY`（同一个硅基流动账号），不需要额外密钥。
+
+`RERANK_MIN_SCORE` 的标定方式与相似度下限相同，先用 `RERANK_SHADOW=true` 收集分布（照常调用并记录 `rerankScores`，但结果仍用向量排序），再定阈值。**注意 rerank 分数与向量相似度不是一个尺度**：当前实测 bge-reranker-v2-m3 通过硅基流动返回的是归一化到 0~1 的分数，相关约 0.26~0.99，无关约 0.001~0.007。
+
+一次实测（4 份文档 / 34 分块 / 10 条评估题，`npm run eval`）：
+
+| | 精排关 | 精排开 + 阈值 0.1 |
+| --- | --- | --- |
+| 有答案的题 recall@5 | 8/8 | 8/8 |
+| 库里没有的题正确拒答 | **0/2** | **2/2** |
+| 每题进入提示词的分块数 | 5 | 1~4 |
+| 单次检索耗时 | ~290ms | ~900ms |
+
+代价是首字延迟增加数百毫秒。文档多、检索预算大时收益更明显；如果只有几十个分块，`RETRIEVAL_MIN_SCORE` 调高往往就够，可以先不开精排。
+
+评估工具：`cd server && npm run eval`，读取 `server/eval/dataset.json`，输出 recall@k / MRR / 拒答率，报告写到 `server/eval/reports/`（已在 `.gitignore` 中）。
+
 ## 部署
 
 推荐结构：nginx 托管前端构建产物并反代 `/api`；后端和 Qdrant 只监听 127.0.0.1；MySQL 不对外。`deploy/` 下有可直接修改使用的模板：

@@ -11,6 +11,7 @@
     "reindex": "tsx --env-file=.env src/scripts/reindex.ts",
     "reset-password": "tsx --env-file=.env src/scripts/reset-password.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
+    "eval": "tsx --env-file=.env eval/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

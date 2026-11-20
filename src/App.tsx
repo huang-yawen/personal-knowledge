@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Menu, Moon, MoreHorizontal, Settings2, Sparkles, Sun, X } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
@@ -7,6 +7,7 @@ import "./theme.css";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ConversationList } from "@/components/ConversationList";
 import { ADMIN_NAV_ITEM, APP_NAME, NAV_ITEMS, findNavItem } from "@/lib/nav";
+import { pageKeyByPath, prefetchPage } from "@/lib/pages";
 import { getSettings } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { useChatStore } from "@/lib/chat-store";
@@ -63,6 +64,12 @@ function App() {
     setIsSidebarOpen(false);
   };
 
+  // 悬停或聚焦导航时预取目标页面的代码，点击时通常已下载完成
+  const prefetchNav = (path: string) => {
+    const key = pageKeyByPath[path];
+    if (key) prefetchPage(key);
+  };
+
   return (
     <div className={`app-shell${isCollapsed ? " sidebar-collapsed" : ""}`}>
       <button
@@ -93,6 +100,8 @@ function App() {
               end={path === "/"}
               className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
               onClick={() => setIsSidebarOpen(false)}
+              onMouseEnter={() => prefetchNav(path)}
+              onFocus={() => prefetchNav(path)}
             >
               <Icon size={19} strokeWidth={1.8} />
               <span>{label}</span>
@@ -122,7 +131,10 @@ function App() {
       {isSidebarOpen && <button className="sidebar-scrim" type="button" aria-label="关闭导航菜单" onClick={() => setIsSidebarOpen(false)} />}
 
       <main className="main-content">
-        <Outlet />
+        {/* 页面按路由懒加载，首次进入某页时先显示占位，侧栏保持可用 */}
+        <Suspense fallback={<div className="page-loading">加载中…</div>}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <DocumentReader onOpenNote={openNote} onAsk={askQuestion} />

@@ -1,13 +1,16 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import App from "@/App";
-import { Dashboard } from "@/pages/Dashboard";
-import { ChatPage } from "@/pages/ChatPage";
-import { KnowledgePage } from "@/pages/KnowledgePage";
-import { NotesPage } from "@/pages/NotesPage";
-import { ProfilePage } from "@/pages/ProfilePage";
-import { AdminPage } from "@/pages/AdminPage";
+import { lazyPage } from "@/lib/pages";
 import { useAuthStore } from "@/lib/auth-store";
+
+// 懒加载的页面组件：模块作用域各创建一次
+const Dashboard = lazyPage("dashboard");
+const ChatPage = lazyPage("chat");
+const KnowledgePage = lazyPage("knowledge");
+const NotesPage = lazyPage("notes");
+const ProfilePage = lazyPage("profile");
+const AdminPage = lazyPage("admin");
 
 // 应用壳里的两种页面容器：
 // ScrollPage 用于普通页面，内容在容器内滚动；BleedPage 用于对话、知识库、笔记这类自己铺满视口的页面

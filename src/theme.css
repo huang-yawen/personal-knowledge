@@ -360,6 +360,8 @@ a.nav-item:visited { color: var(--text); }
 
 /* 登录 / 注册页 */
 .auth-loading { min-height: 100dvh; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+/* 懒加载页面时的占位：只在首次进入某个页面、代码还在下载时出现 */
+.page-loading { min-height: 40vh; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
 .auth-shell { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); background: var(--surface); color: var(--text); }
 
 /* 左侧品牌面板：固定的深色，不随主题变化 */

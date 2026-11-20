@@ -3,6 +3,7 @@ import { config } from "../../config";
 import { pool } from "../../db";
 import { embedTexts } from "./embedding";
 import { searchPoints } from "./qdrant";
+import { rerankChunks } from "./rerank";
 import { currentUserId } from "../auth/context";
 
 export type RetrievedChunk = {
@@ -26,13 +27,30 @@ export const describeRetrievalError = (error: unknown) =>
 export const filterByScore = <T extends { score: number }>(hits: T[], minScore: number): T[] =>
   minScore > 0 ? hits.filter((hit) => hit.score >= minScore) : hits;
 
-// 检索过程的统计，由调用方传入并填充，用于日志和标定相似度下限
+// 检索过程的统计，由调用方传入并填充，用于日志和标定阈值
 export type RetrievalStats = {
   // 向量检索命中的条数（过滤前）
   candidates: number;
   // 因为低于相似度下限被丢弃的条数
   filtered: number;
+  // 是否实际做了精排
+  rerankApplied: boolean;
+  // 是否因为精排服务不可用而降级回向量排序
+  rerankDegraded: boolean;
+  rerankMs: number | null;
+  // 精排后各分块的分数（顺序与返回结果一致），用于标定 RERANK_MIN_SCORE
+  rerankScores: number[] | null;
 };
+
+// 统计对象的初始值，避免每个调用方都手写一遍
+export const emptyRetrievalStats = (): RetrievalStats => ({
+  candidates: 0,
+  filtered: 0,
+  rerankApplied: false,
+  rerankDegraded: false,
+  rerankMs: null,
+  rerankScores: null,
+});
 
 // 请求里的可选 id（如知识库范围）：不传或 null 表示未指定；非法值返回 "invalid"
 export const parseOptionalId = (value: unknown): number | undefined | "invalid" => {
@@ -59,20 +77,42 @@ export const ownsKnowledgeBases = async (ids: number[]) => {
 };
 
 // 向量检索命中后，以 MySQL 中的分块为准取正文；已被删除但向量残留的分块会被自然丢弃。
-// 先按相似度下限过滤再取正文：Qdrant 返回的分数是从高到低排的，所以只取前 limit 条再过滤不会漏掉更高分的
+// 开启精排时先放大召回池，再用 cross-encoder 重新排序，最后才截断到 limit
 export const retrieveChunks = async (
   query: string,
-  options: { knowledgeBaseIds?: number[]; limit?: number; minScore?: number; stats?: RetrievalStats } = {},
+  options: {
+    knowledgeBaseIds?: number[];
+    limit?: number;
+    minScore?: number;
+    stats?: RetrievalStats;
+    // 是否精排；不传则跟随配置
+    rerank?: boolean;
+    // 精排用的查询（用户原话）。改写过的检索串适合找资料，但判断相关性用原话更准
+    rerankQuery?: string;
+  } = {},
 ): Promise<RetrievedChunk[]> => {
+  const wantRerank = options.rerank ?? config.rerank.enabled;
+  const finalLimit = options.limit ?? config.retrieval.topK;
+  // 只取 limit 条再精排没有意义，所以精排时把召回池放大
+  const recallLimit = wantRerank
+    ? Math.min(Math.max(finalLimit * 4, config.rerank.candidates), config.rerank.maxCandidates)
+    : finalLimit;
+
   const [vector] = await embedTexts([query]);
   const hits = await searchPoints(vector, {
     knowledgeBaseIds: options.knowledgeBaseIds,
-    limit: options.limit ?? config.retrieval.topK,
+    limit: recallLimit,
   });
-  const kept = filterByScore(hits, options.minScore ?? config.retrieval.minScore);
+  // 精排时会做真正的相关性判断，召回阶段的阈值可以放宽，避免在精排前误杀
+  const minScore = options.minScore ?? (wantRerank ? config.retrieval.recallMinScore : config.retrieval.minScore);
+  const kept = filterByScore(hits, minScore);
   if (options.stats) {
     options.stats.candidates = hits.length;
     options.stats.filtered = hits.length - kept.length;
+    options.stats.rerankApplied = false;
+    options.stats.rerankDegraded = false;
+    options.stats.rerankMs = null;
+    options.stats.rerankScores = null;
   }
   if (kept.length === 0) return [];
 
@@ -83,7 +123,7 @@ export const retrieveChunks = async (
     [kept.map((hit) => hit.payload.chunk_id), currentUserId()],
   );
   const byId = new Map(rows.map((row) => [row.id as number, row]));
-  return kept.flatMap((hit) => {
+  const chunks = kept.flatMap((hit) => {
     const row = byId.get(hit.payload.chunk_id);
     if (!row) return [];
     return [
@@ -98,4 +138,20 @@ export const retrieveChunks = async (
       },
     ];
   });
+
+  if (!wantRerank) return chunks.slice(0, finalLimit);
+
+  // 精排：null 表示服务不可用，退回向量排序；空数组表示精排判定都不相关，交给调用方走「没找到资料」分支
+  const rerankStartedAt = Date.now();
+  const reranked = await rerankChunks(options.rerankQuery ?? query, chunks, { limit: finalLimit });
+  if (options.stats) {
+    options.stats.rerankMs = Date.now() - rerankStartedAt;
+    options.stats.rerankApplied = reranked !== null;
+    options.stats.rerankDegraded = reranked === null;
+    options.stats.rerankScores = reranked?.map((chunk) => Number(chunk.rerankScore.toFixed(3))) ?? null;
+  }
+  if (reranked === null) return chunks.slice(0, finalLimit);
+  // 影子模式：照常打分并记录，但结果仍用向量排序，用于先摸清分数分布再定阈值
+  if (config.rerank.shadow) return chunks.slice(0, finalLimit);
+  return reranked;
 };

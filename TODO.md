@@ -111,6 +111,7 @@
 - 多轮追问的检索改写：`"它有什么优点"`、`"第二点展开说说"` 这类脱离上文没有主语的问题，检索前先把上一轮用户提问拼进查询串（`server/src/modules/rag/query.ts`，有单测）。只影响检索，发给模型的仍是原话。
 - 检索相关性下限 `RETRIEVAL_MIN_SCORE`：低于该分数的资料不进入提示词，`0` 表示不过滤；问答日志新增 `scores`、`candidates`、`filtered`、`rewritten`，用于按真实数据标定（标定方法见 README「检索调优」）。
 - 前端改为正式路由（`react-router-dom`），一级页面各有地址：`/` 工作台、`/chat` 对话、`/knowledge` 知识库、`/notes` 笔记、`/profile` 个人中心、`/admin` 管理（仅管理员，非管理员回工作台）。未知路径重定向到工作台；侧栏用 `NavLink` 高亮，刷新和深链接直达原页面。文档阅读抽屉仍是浮层，不占地址。
+- 前端按路由做代码分割（`src/lib/pages.ts`）：首屏只加载工作台，对话页（assistant-ui）和笔记页（CodeMirror + react-markdown）在进入时才下载，侧栏悬停/聚焦会预取。首屏 JS 从 1947 kB（gzip 618 kB）降到约 453 kB（gzip 147 kB）。
 
 ## 6. RAG 实施原则
 

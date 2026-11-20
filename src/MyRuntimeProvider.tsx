@@ -9,6 +9,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { streamChat, type ChatSource } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 
+// 后端对话接口只接收文字；这些是它收不了的内容类型（粘贴图片等仍可能产生）
+const ATTACHMENT_PARTS = new Set(["file", "image", "audio"]);
+
 // 调用后端 /api/chat：先收到对话 id 和引用来源，再逐段收到回答文字
 const chatAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
@@ -16,6 +19,11 @@ const chatAdapter: ChatModelAdapter = {
     // 回答期间用户可能切换了对话，旧回答不能再写入新对话的状态
     const isCurrentThread = () => useChatStore.getState().threadKey === threadKey;
     setSources([]);
+
+    // 没有附件界面后，理论上不会再产生附件；万一有（如粘贴图片），明确告知而不是静默丢弃
+    if (messages.some((message) => message.content.some((part) => ATTACHMENT_PARTS.has(part.type)))) {
+      throw new Error("对话只支持文字提问：请先在「我的知识库」上传文件，处理完成后就能在回答里引用它。");
+    }
 
     const history = messages.flatMap((message) => {
       if (message.role !== "user" && message.role !== "assistant") return [];
