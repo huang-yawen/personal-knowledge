@@ -21,6 +21,7 @@ import { NoteGenerateDialog } from "@/components/NoteGenerateDialog";
 import { useChatStore } from "@/lib/chat-store";
 import { useNoteNavStore } from "@/lib/note-nav-store";
 import { useReaderStore } from "@/lib/reader-store";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { errorMessage } from "@/lib/utils";
 import {
   addNoteToKnowledgeBase,
@@ -96,6 +97,10 @@ export function NotesPage() {
   const editorViewRef = useRef<EditorView | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
+
+  // 两个下拉菜单都支持 Escape 关闭
+  useEscapeKey(isTagMenuOpen, () => setIsTagMenuOpen(false));
+  useEscapeKey(isKbMenuOpen, () => setIsKbMenuOpen(false));
 
   const refreshTagOptions = useCallback(() => {
     listNoteTags().then(setTagOptions).catch(console.error);

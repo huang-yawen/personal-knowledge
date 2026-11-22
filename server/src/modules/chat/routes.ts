@@ -305,6 +305,9 @@ chatRouter.post("/", async (req, res) => {
         rewritten: retrievalQuery !== question,
         candidates: retrievalStats.candidates,
         filtered: retrievalStats.filtered,
+        // 混合检索：是否开启、关键词那一路命中多少
+        hybrid: config.retrieval.hybrid.enabled,
+        keywordHits: retrievalStats.keywordHits,
         hits,
         scores,
         topScore: topScore === undefined ? null : Number(topScore.toFixed(3)),

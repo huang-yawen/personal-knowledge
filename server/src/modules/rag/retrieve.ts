@@ -4,6 +4,8 @@ import { pool } from "../../db";
 import { embedTexts } from "./embedding";
 import { searchPoints } from "./qdrant";
 import { rerankChunks } from "./rerank";
+import { searchKeywordChunks, type KeywordHit } from "./keyword";
+import { reciprocalRankFusion } from "./fuse";
 import { currentUserId } from "../auth/context";
 
 export type RetrievedChunk = {
@@ -13,7 +15,10 @@ export type RetrievedChunk = {
   documentName: string;
   page: number | null;
   content: string;
+  // 向量相似度；只被关键词命中的分块没有余弦相似度，这里是 0
   score: number;
+  // 这一条是从哪一路检索到的
+  matchedBy: "dense" | "keyword" | "both";
 };
 
 // 检索失败时给用户看的提示：区分嵌入服务不可用和其他（向量库、数据库）不可用
@@ -23,7 +28,7 @@ export const describeRetrievalError = (error: unknown) =>
     : "检索资料失败，请确认向量库（Qdrant）和数据库已启动后重试";
 
 // 丢弃相似度低于下限的命中。宁可少给几条资料，也不要让模型拿不相关的内容硬凑答案；
-// minScore 为 0 或负数表示不启用过滤。返回数量供调用方记录日志
+// minScore 为 0 或负数表示不启用过滤
 export const filterByScore = <T extends { score: number }>(hits: T[], minScore: number): T[] =>
   minScore > 0 ? hits.filter((hit) => hit.score >= minScore) : hits;
 
@@ -33,9 +38,9 @@ export type RetrievalStats = {
   candidates: number;
   // 因为低于相似度下限被丢弃的条数
   filtered: number;
-  // 是否实际做了精排
+  // 关键词路命中的条数
+  keywordHits: number;
   rerankApplied: boolean;
-  // 是否因为精排服务不可用而降级回向量排序
   rerankDegraded: boolean;
   rerankMs: number | null;
   // 精排后各分块的分数（顺序与返回结果一致），用于标定 RERANK_MIN_SCORE
@@ -46,6 +51,7 @@ export type RetrievalStats = {
 export const emptyRetrievalStats = (): RetrievalStats => ({
   candidates: 0,
   filtered: 0,
+  keywordHits: 0,
   rerankApplied: false,
   rerankDegraded: false,
   rerankMs: null,
@@ -76,8 +82,19 @@ export const ownsKnowledgeBases = async (ids: number[]) => {
   return rows.length === ids.length;
 };
 
-// 向量检索命中后，以 MySQL 中的分块为准取正文；已被删除但向量残留的分块会被自然丢弃。
-// 开启精排时先放大召回池，再用 cross-encoder 重新排序，最后才截断到 limit
+// 召回池的大小：精排要有多余候选才有排序余地，融合也要两路都有货
+const recallPoolSize = (finalLimit: number) =>
+  Math.min(
+    Math.max(finalLimit * config.retrieval.recallMultiplier, config.retrieval.recallFloor),
+    config.retrieval.maxCandidates,
+  );
+
+/**
+ * 检索：向量召回 →（可选）关键词召回 → RRF 融合 →（可选）精排 → 截断。
+ *
+ * 三件事都可独立开关：hybrid 决定要不要跑关键词那一路，rerank 决定要不要 cross-encoder 重排。
+ * 精排返回 null 表示服务不可用，会退回当前顺序；返回空数组表示判定都不相关。
+ */
 export const retrieveChunks = async (
   query: string,
   options: {
@@ -85,18 +102,16 @@ export const retrieveChunks = async (
     limit?: number;
     minScore?: number;
     stats?: RetrievalStats;
-    // 是否精排；不传则跟随配置
     rerank?: boolean;
+    hybrid?: boolean;
     // 精排用的查询（用户原话）。改写过的检索串适合找资料，但判断相关性用原话更准
     rerankQuery?: string;
   } = {},
 ): Promise<RetrievedChunk[]> => {
   const wantRerank = options.rerank ?? config.rerank.enabled;
+  const wantHybrid = options.hybrid ?? config.retrieval.hybrid.enabled;
   const finalLimit = options.limit ?? config.retrieval.topK;
-  // 只取 limit 条再精排没有意义，所以精排时把召回池放大
-  const recallLimit = wantRerank
-    ? Math.min(Math.max(finalLimit * 4, config.rerank.candidates), config.rerank.maxCandidates)
-    : finalLimit;
+  const recallLimit = wantRerank || wantHybrid ? recallPoolSize(finalLimit) : finalLimit;
 
   const [vector] = await embedTexts([query]);
   const hits = await searchPoints(vector, {
@@ -106,42 +121,76 @@ export const retrieveChunks = async (
   // 精排时会做真正的相关性判断，召回阶段的阈值可以放宽，避免在精排前误杀
   const minScore = options.minScore ?? (wantRerank ? config.retrieval.recallMinScore : config.retrieval.minScore);
   const kept = filterByScore(hits, minScore);
+
+  // 关键词路：补向量检索对专有名词、型号、错误码不敏感的短板。
+  // 这一路失败就退回纯向量结果，不能让主流程挂掉
+  const keyword = wantHybrid
+    ? await searchKeywordChunks(query, {
+        knowledgeBaseIds: options.knowledgeBaseIds,
+        limit: config.retrieval.hybrid.keywordLimit,
+      }).catch((error: unknown) => {
+        console.error("[retrieval] 关键词检索失败，只用向量结果", error);
+        return [] as KeywordHit[];
+      })
+    : [];
+
   if (options.stats) {
     options.stats.candidates = hits.length;
     options.stats.filtered = hits.length - kept.length;
+    options.stats.keywordHits = keyword.length;
     options.stats.rerankApplied = false;
     options.stats.rerankDegraded = false;
     options.stats.rerankMs = null;
     options.stats.rerankScores = null;
   }
-  if (kept.length === 0) return [];
+
+  const hasDense = kept.length > 0;
+  const hasKeyword = keyword.length > 0;
+  if (!hasDense && !hasKeyword) return [];
+
+  // 决定候选顺序：两路都有就融合名次，只有一路就按那一路的顺序
+  const denseScore = new Map(kept.map((hit) => [hit.payload.chunk_id, hit.score]));
+  const keywordIds = new Set(keyword.map((hit) => hit.chunkId));
+  let orderedIds: number[];
+  if (hasDense && hasKeyword) {
+    orderedIds = reciprocalRankFusion(
+      [kept.map((hit) => hit.payload.chunk_id), keyword.map((hit) => hit.chunkId)],
+      { k: config.retrieval.hybrid.rrfK, limit: recallLimit },
+    ).map((hit) => hit.id);
+  } else if (hasDense) {
+    orderedIds = kept.map((hit) => hit.payload.chunk_id);
+  } else {
+    orderedIds = keyword.map((hit) => hit.chunkId);
+  }
 
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT c.id, c.knowledge_base_id, c.document_id, c.content, c.page_number, d.original_name
      FROM document_chunks c JOIN documents d ON d.id = c.document_id
      WHERE c.id IN (?) AND c.user_id = ?`,
-    [kept.map((hit) => hit.payload.chunk_id), currentUserId()],
+    [orderedIds, currentUserId()],
   );
   const byId = new Map(rows.map((row) => [row.id as number, row]));
-  const chunks = kept.flatMap((hit) => {
-    const row = byId.get(hit.payload.chunk_id);
+  const chunks: RetrievedChunk[] = orderedIds.flatMap((chunkId) => {
+    const row = byId.get(chunkId);
     if (!row) return [];
+    const dense = denseScore.get(chunkId);
     return [
       {
-        chunkId: row.id as number,
+        chunkId,
         knowledgeBaseId: row.knowledge_base_id as number,
         documentId: row.document_id as number,
         documentName: row.original_name as string,
         page: row.page_number as number | null,
         content: row.content as string,
-        score: hit.score,
+        score: dense ?? 0,
+        matchedBy: dense === undefined ? "keyword" : keywordIds.has(chunkId) ? "both" : "dense",
       },
     ];
   });
 
   if (!wantRerank) return chunks.slice(0, finalLimit);
 
-  // 精排：null 表示服务不可用，退回向量排序；空数组表示精排判定都不相关，交给调用方走「没找到资料」分支
+  // 精排：null 表示服务不可用，退回当前顺序；空数组表示精排判定都不相关
   const rerankStartedAt = Date.now();
   const reranked = await rerankChunks(options.rerankQuery ?? query, chunks, { limit: finalLimit });
   if (options.stats) {
@@ -151,7 +200,7 @@ export const retrieveChunks = async (
     options.stats.rerankScores = reranked?.map((chunk) => Number(chunk.rerankScore.toFixed(3))) ?? null;
   }
   if (reranked === null) return chunks.slice(0, finalLimit);
-  // 影子模式：照常打分并记录，但结果仍用向量排序，用于先摸清分数分布再定阈值
+  // 影子模式：照常打分并记录，但结果仍用当前顺序
   if (config.rerank.shadow) return chunks.slice(0, finalLimit);
   return reranked;
 };

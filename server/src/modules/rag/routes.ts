@@ -13,6 +13,8 @@ ragRouter.post("/search", async (req, res) => {
   const minScore = body.minScore === undefined ? undefined : Number(body.minScore);
   // 精排开关：不传则跟随配置；传 false 可以对比「精排前后」的结果差异
   const rerank = body.rerank === undefined ? undefined : body.rerank;
+  // 混合检索开关：同上，方便对比两路融合前后的差异
+  const hybrid = body.hybrid === undefined ? undefined : body.hybrid;
 
   if (!query || query.length > 500) {
     res.status(400).json({ error: "查询内容不能为空，且不能超过 500 个字符" });
@@ -34,12 +36,17 @@ ragRouter.post("/search", async (req, res) => {
     res.status(400).json({ error: "rerank 需要是布尔值" });
     return;
   }
+  if (hybrid !== undefined && typeof hybrid !== "boolean") {
+    res.status(400).json({ error: "hybrid 需要是布尔值" });
+    return;
+  }
   res.json(
     await retrieveChunks(query, {
       knowledgeBaseIds: knowledgeBaseId === undefined ? undefined : [knowledgeBaseId],
       limit,
       minScore,
       rerank,
+      hybrid,
     }),
   );
 });

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, FileText, MessageSquarePlus, MoreHorizontal, Pencil, Search, Star, Trash2 } from "lucide-react";
 import { summarizeConversation, type ConversationDto } from "@/lib/api";
 import { RelatedNotes } from "@/components/RelatedNotes";
 import { useChatStore } from "@/lib/chat-store";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 
 // 按更新日期把对话分成 今天 / 昨天 / 更早
 const dayGroup = (iso: string) => {
@@ -28,6 +30,11 @@ export function ConversationList({ onPick, onOpenNote }: { onPick: () => void; o
   const [menuId, setMenuId] = useState<number | null>(null);
   // 会话总结弹窗：text 为空表示生成中
   const [summary, setSummary] = useState<{ title: string; text?: string; error?: string } | null>(null);
+  const summaryRef = useRef<HTMLDivElement>(null);
+  // 菜单和总结弹窗都支持 Escape 关闭；弹窗打开时把焦点锁进去
+  useEscapeKey(menuId !== null, () => setMenuId(null));
+  useEscapeKey(summary !== null, () => setSummary(null));
+  useFocusTrap(summaryRef, summary !== null);
 
   useEffect(() => {
     loadConversations().catch(console.error);
@@ -142,7 +149,7 @@ export function ConversationList({ onPick, onOpenNote }: { onPick: () => void; o
       </button>
       {summary && (
         <div className="summary-overlay" role="dialog" aria-label="对话总结" onClick={() => setSummary(null)}>
-          <div className="summary-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="summary-dialog" role="dialog" aria-modal="true" aria-label="对话总结" ref={summaryRef} onClick={(event) => event.stopPropagation()}>
             <h3>{summary.title}</h3>
             <p className={summary.error ? "summary-error" : undefined}>{summary.error ?? summary.text ?? "正在生成总结…"}</p>
             <div className="summary-actions">

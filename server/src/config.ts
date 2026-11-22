@@ -56,6 +56,16 @@ export const config = {
     minScore: ratioEnv("RETRIEVAL_MIN_SCORE", 0.35),
     // 开启精排时用更宽松的召回下限：别在精排前就把可能相关的资料误杀
     recallMinScore: ratioEnv("RETRIEVAL_RECALL_MIN_SCORE", 0.2),
+    // 开启精排或混合检索时召回池会放大：没有多余的候选，精排无从排序、融合也没有第二路可补
+    recallMultiplier: numberEnv("RETRIEVAL_RECALL_MULTIPLIER", 4),
+    recallFloor: numberEnv("RETRIEVAL_RECALL_FLOOR", 20),
+    maxCandidates: numberEnv("RETRIEVAL_MAX_CANDIDATES", 50),
+    // 混合检索：向量检索（语义）+ MySQL ngram 全文检索（字面），用 RRF 融合两路名次
+    hybrid: {
+      enabled: process.env.RETRIEVAL_HYBRID === "true",
+      keywordLimit: numberEnv("RETRIEVAL_KEYWORD_LIMIT", 20),
+      rrfK: numberEnv("RETRIEVAL_RRF_K", 60),
+    },
   },
   // 精排：向量召回后用一个 cross-encoder 重新排序，决定哪些资料真正进入提示词
   rerank: {
@@ -69,8 +79,6 @@ export const config = {
     // 精排分数阈值：rerank 分数可能是 logit（有正有负、无上界），所以不能用限制 0~1 的 ratioEnv。
     // 未设置表示不过滤，建议先用影子模式看真实分布再定
     minScore: optionalNumberEnv("RERANK_MIN_SCORE"),
-    candidates: numberEnv("RERANK_CANDIDATES", 20),
-    maxCandidates: numberEnv("RERANK_MAX_CANDIDATES", 50),
     timeoutMs: numberEnv("RERANK_TIMEOUT_MS", 5000),
   },
   chat: {

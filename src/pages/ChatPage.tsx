@@ -5,6 +5,7 @@ import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 import { MyRuntimeProvider } from "@/MyRuntimeProvider";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 
 export function ChatPage() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseDto[]>([]);
@@ -22,6 +23,8 @@ export function ChatPage() {
       : knowledgeBaseIds.length === 1
         ? (knowledgeBases.find((base) => base.id === knowledgeBaseIds[0])?.name ?? "1 个知识库")
         : `${knowledgeBaseIds.length} 个知识库`;
+
+  useEscapeKey(isScopeOpen, () => setIsScopeOpen(false));
 
   const toggleBase = (id: number) =>
     setKnowledgeBaseIds(knowledgeBaseIds.includes(id) ? knowledgeBaseIds.filter((item) => item !== id) : [...knowledgeBaseIds, id]);

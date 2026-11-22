@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { ChevronRight, CheckCircle2, CircleAlert, FileUp, LibraryBig, Pencil, Plus, RotateCw, Search, Settings2, Sparkles, Trash2, Upload, X } from "lucide-react";
 import {
   createKnowledgeBase as createKnowledgeBaseApi,
@@ -13,6 +13,8 @@ import {
   type KnowledgeBaseDto,
 } from "@/lib/api";
 import { useReaderStore } from "@/lib/reader-store";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import type { KnowledgeBase, KnowledgeDocument } from "@/types";
 
 const covers = ["blue", "purple", "orange", "green"] as const;
@@ -72,6 +74,13 @@ export function KnowledgePage() {
   const [edit, setEdit] = useState({ name: "", description: "", instructions: "" });
   const [documentQuery, setDocumentQuery] = useState("");
   const openReader = useReaderStore((state) => state.open);
+  // 两个弹窗都要把焦点锁住，并在 Escape 时关闭
+  const createModalRef = useRef<HTMLElement>(null);
+  const editModalRef = useRef<HTMLElement>(null);
+  useFocusTrap(createModalRef, isCreateOpen);
+  useFocusTrap(editModalRef, isEditOpen);
+  useEscapeKey(isCreateOpen, () => setIsCreateOpen(false));
+  useEscapeKey(isEditOpen, () => setIsEditOpen(false));
   const selectedBase = knowledgeBases.find((item) => item.id === selectedId) ?? knowledgeBases[0];
 
   useEffect(() => {
@@ -225,8 +234,8 @@ export function KnowledgePage() {
         )}
       </div>
 
-      {isCreateOpen && <div className="create-modal-layer" role="presentation"><button className="modal-backdrop" type="button" aria-label="关闭创建知识库弹窗" onClick={() => setIsCreateOpen(false)} /><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-library-title"><button className="modal-close" type="button" aria-label="关闭" onClick={() => setIsCreateOpen(false)}><X size={18} /></button><span className="modal-mark"><LibraryBig size={20} /></span><h3 id="create-library-title">创建知识库</h3><p>为一组相关资料建立专属空间，之后可以在 AI 对话中选择它。</p><label>知识库名称<input autoFocus value={newName} placeholder="例如：机器学习" onChange={(event) => setNewName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") createKnowledgeBase(); }} /></label><label>描述（可选）<textarea value={newDescription} placeholder="简单描述这个知识库的用途" onChange={(event) => setNewDescription(event.target.value)} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" onClick={() => setIsCreateOpen(false)}>取消</button><button type="button" className="modal-primary" onClick={createKnowledgeBase} disabled={!newName.trim()}>创建知识库</button></div></section></div>}
-      {isEditOpen && selectedBase && <div className="create-modal-layer" role="presentation"><button className="modal-backdrop" type="button" aria-label="关闭编辑知识库弹窗" onClick={() => setIsEditOpen(false)} /><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="edit-library-title"><button className="modal-close" type="button" aria-label="关闭" onClick={() => setIsEditOpen(false)}><X size={18} /></button><span className="modal-mark"><Pencil size={20} /></span><h3 id="edit-library-title">编辑知识库</h3><p>“回答指令”会告诉 AI 回答这个知识库里的问题时该怎么做。</p><label>知识库名称<input autoFocus value={edit.name} maxLength={100} onChange={(event) => setEdit({ ...edit, name: event.target.value })} /></label><label>描述（可选）<textarea value={edit.description} maxLength={500} placeholder="简单描述这个知识库的用途" onChange={(event) => setEdit({ ...edit, description: event.target.value })} /></label><label>回答指令（可选）<textarea value={edit.instructions} maxLength={500} placeholder="例如：这是法律资料，回答要引用具体条款，并提示不构成法律意见" onChange={(event) => setEdit({ ...edit, instructions: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" onClick={() => setIsEditOpen(false)}>取消</button><button type="button" className="modal-primary" onClick={() => saveEdit(selectedBase)} disabled={!edit.name.trim()}>保存</button></div></section></div>}
+      {isCreateOpen && <div className="create-modal-layer" role="presentation"><button className="modal-backdrop" type="button" aria-label="关闭创建知识库弹窗" onClick={() => setIsCreateOpen(false)} /><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-library-title" ref={createModalRef}><button className="modal-close" type="button" aria-label="关闭" onClick={() => setIsCreateOpen(false)}><X size={18} /></button><span className="modal-mark"><LibraryBig size={20} /></span><h3 id="create-library-title">创建知识库</h3><p>为一组相关资料建立专属空间，之后可以在 AI 对话中选择它。</p><label>知识库名称<input autoFocus value={newName} placeholder="例如：机器学习" onChange={(event) => setNewName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") createKnowledgeBase(); }} /></label><label>描述（可选）<textarea value={newDescription} placeholder="简单描述这个知识库的用途" onChange={(event) => setNewDescription(event.target.value)} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" onClick={() => setIsCreateOpen(false)}>取消</button><button type="button" className="modal-primary" onClick={createKnowledgeBase} disabled={!newName.trim()}>创建知识库</button></div></section></div>}
+      {isEditOpen && selectedBase && <div className="create-modal-layer" role="presentation"><button className="modal-backdrop" type="button" aria-label="关闭编辑知识库弹窗" onClick={() => setIsEditOpen(false)} /><section className="create-modal" role="dialog" aria-modal="true" aria-labelledby="edit-library-title" ref={editModalRef}><button className="modal-close" type="button" aria-label="关闭" onClick={() => setIsEditOpen(false)}><X size={18} /></button><span className="modal-mark"><Pencil size={20} /></span><h3 id="edit-library-title">编辑知识库</h3><p>“回答指令”会告诉 AI 回答这个知识库里的问题时该怎么做。</p><label>知识库名称<input autoFocus value={edit.name} maxLength={100} onChange={(event) => setEdit({ ...edit, name: event.target.value })} /></label><label>描述（可选）<textarea value={edit.description} maxLength={500} placeholder="简单描述这个知识库的用途" onChange={(event) => setEdit({ ...edit, description: event.target.value })} /></label><label>回答指令（可选）<textarea value={edit.instructions} maxLength={500} placeholder="例如：这是法律资料，回答要引用具体条款，并提示不构成法律意见" onChange={(event) => setEdit({ ...edit, instructions: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" onClick={() => setIsEditOpen(false)}>取消</button><button type="button" className="modal-primary" onClick={() => saveEdit(selectedBase)} disabled={!edit.name.trim()}>保存</button></div></section></div>}
     </div>
   );
 }

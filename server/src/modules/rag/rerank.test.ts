@@ -25,6 +25,7 @@ const chunk = (i: number, content = `分块${i}`): RetrievedChunk => ({
   page: null,
   content,
   score: 0.5,
+  matchedBy: "dense",
 });
 
 // 假的 fetch：返回固定 JSON

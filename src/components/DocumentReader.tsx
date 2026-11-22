@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { createNote, getDocumentChunks, type DocumentChunkDto, type DocumentDto } from "@/lib/api";
 import { RelatedNotes } from "@/components/RelatedNotes";
 import { useReaderStore } from "@/lib/reader-store";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 type Loaded = { document: DocumentDto; chunks: DocumentChunkDto[] };
 // 结果带上请求的文档 id，切换文档时旧结果自动失效，不需要在 effect 里同步重置状态
@@ -14,6 +15,9 @@ type Extract = { state: "saving" | "saved" | "error"; noteId?: number };
 export function DocumentReader({ onOpenNote, onAsk }: { onOpenNote: (noteId: number) => void; onAsk: (question: string, knowledgeBaseId: number) => void }) {
   const { documentId, chunkId, close } = useReaderStore();
   const [result, setResult] = useState<Result | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  // 抽屉打开时把键盘焦点锁进来，关闭时还给原来的元素
+  useFocusTrap(panelRef, documentId !== null);
   const targetRef = useRef<HTMLElement | null>(null);
   const sectionRefs = useRef<Record<number, HTMLElement | null>>({});
   const [extracts, setExtracts] = useState<Record<number, Extract>>({});
@@ -70,7 +74,7 @@ export function DocumentReader({ onOpenNote, onAsk }: { onOpenNote: (noteId: num
   return (
     <div className="reader-layer" role="presentation">
       <button className="modal-backdrop" type="button" aria-label="关闭阅读视图" onClick={close} />
-      <aside className="reader-panel" role="dialog" aria-label="文档阅读">
+      <aside className="reader-panel" role="dialog" aria-label="文档阅读" aria-modal="true" ref={panelRef}>
         <header className="reader-head">
           <div className="reader-title">
             <strong>{loaded?.document.name ?? "加载中…"}</strong>
