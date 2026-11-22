@@ -1,4 +1,4 @@
-# 一键部署：本地构建前端 → 上传 → 服务器拉代码/迁移/重启/自检
+﻿# 一键部署：本地构建前端 → 上传 → 服务器拉代码/迁移/重启/自检
 #
 # 用法（在仓库根目录执行）：
 #   ./scripts/deploy.ps1                  # 完整部署（前端 + 后端）
@@ -97,3 +97,6 @@ try {
 
 Write-Host "`n部署完成。" -ForegroundColor Green
 Write-Host "回滚前端：ssh 到服务器后 cd /opt/personal-knowledge && rm -rf dist && mv dist.prev dist && systemctl restart personal-knowledge"
+
+# 显式给 0：构建工具会往 stderr 写内容，不显式退出的话调用方可能拿到非零码
+exit 0
