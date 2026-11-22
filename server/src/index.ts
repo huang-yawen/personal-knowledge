@@ -15,6 +15,7 @@ import { knowledgeBaseRouter } from "./modules/knowledge-base/routes";
 import { noteRouter } from "./modules/note/routes";
 import { authRouter } from "./modules/auth/routes";
 import { requireAuth, sameOriginOnly } from "./modules/auth/middleware";
+import { readOnlyForDemo } from "./modules/auth/demo";
 import type { AuthedRequest } from "./modules/auth/context";
 import { dailyTokenQuota, userRateLimit } from "./modules/usage";
 import { statsRouter } from "./modules/usage/routes";
@@ -71,6 +72,8 @@ app.use("/api", (req, res, next) => {
 app.use("/api", sameOriginOnly);
 app.use("/api/auth", authRouter);
 app.use("/api", requireAuth);
+// 演示账号只读：放行浏览与提问，其余写操作一律 403（必须在业务路由之前）
+app.use("/api", readOnlyForDemo);
 
 // 限流与额度：所有接口有总体频率上限；调用模型的接口再单独限流并检查每日 token 额度；上传和重试处理单独限流
 app.use("/api", userRateLimit("api", config.limits.apiPerMinute));

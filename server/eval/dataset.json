@@ -1,78 +1,33 @@
 {
-  "version": 1,
-  "_comment": "评估集：结构示例。语料只有 4 份文档、约 2200 字，且 test.txt 与「你好」内容近乎重复，所以这里的数字只能验证工具链，不能代表真实检索水平。补充真实资料后请扩充 cases。",
-  "knowledgeBaseIds": [16, 17],
+  "version": 2,
+  "_comment": "评估集 v2：语料是演示知识库（README / DESIGN / TODO 三份文档，28 个分块，约 2.1 万字），问题围绕这个项目本身。所有 contains 特征串都已用 SQL 核实确实存在于分块正文中。",
+  "userId": 3,
+  "knowledgeBaseIds": [19],
   "cases": [
-    {
-      "id": "p01",
-      "type": "positive",
-      "question": "这个项目的向量检索用的是什么？",
-      "relevant": [{ "contains": "Qdrant" }],
-      "note": "test.txt / 架构表"
-    },
-    {
-      "id": "p02",
-      "type": "positive",
-      "question": "切块策略是怎么设计的？",
-      "relevant": [{ "contains": "可解释的切块策略" }],
-      "note": "TODO 的 RAG 实施原则"
-    },
-    {
-      "id": "p03",
-      "type": "positive",
-      "question": "每个知识库最多可以放多少个文件？",
-      "relevant": [{ "contains": "100 个文件" }],
-      "note": "文件配额"
-    },
-    {
-      "id": "p04",
-      "type": "positive",
-      "question": "Linux 里怎么查看磁盘占用？",
-      "relevant": [{ "contains": "df -h" }],
-      "note": "linux 操作手册"
-    },
-    {
-      "id": "p05",
-      "type": "positive",
-      "question": "怎么列出所有正在运行的进程？",
-      "relevant": [{ "contains": "ps aux" }],
-      "note": "linux 操作手册"
-    },
-    {
-      "id": "p06",
-      "type": "positive",
-      "question": "合作开发协议的甲方是谁？",
-      "relevant": [{ "contains": "湖南工程学院" }],
-      "note": "合作开发协议.pdf"
-    },
-    {
-      "id": "p07",
-      "type": "positive",
-      "question": "合作开发的是什么系统？",
-      "relevant": [{ "contains": "智学题库出题组卷管理系统" }],
-      "note": "合作开发协议.pdf"
-    },
-    {
-      "id": "f01",
-      "type": "followup",
-      "followupOf": "p02",
-      "question": "那它为什么还要保存原文位置？",
-      "relevant": [{ "contains": "原始文档位置的映射" }],
-      "note": "追问：脱离上文没有主语，用于验证多轮改写"
-    },
-    {
-      "id": "n01",
-      "type": "negative",
-      "question": "红烧肉的做法是什么？",
-      "relevant": [],
-      "note": "库里完全没有，必须返回 0 条"
-    },
-    {
-      "id": "n02",
-      "type": "negative",
-      "question": "股票估值应该用市盈率还是市净率？",
-      "relevant": [],
-      "note": "库里完全没有，必须返回 0 条"
-    }
+    { "id": "p01", "type": "positive", "question": "这个项目的视觉关键词是什么？", "relevant": [{ "contains": "Calm" }], "note": "DESIGN.md 设计定位" },
+    { "id": "p02", "type": "positive", "question": "浅色模式下 App 的背景用的是什么颜色？", "relevant": [{ "contains": "#F5F5F7" }], "note": "DESIGN.md 主题系统" },
+    { "id": "p03", "type": "positive", "question": "设计规范里按钮的圆角是多少？", "relevant": [{ "contains": "按钮 10px" }], "note": "DESIGN.md 圆角规范" },
+    { "id": "p04", "type": "positive", "question": "这个项目的向量检索用的是什么？", "relevant": [{ "contains": "Qdrant（本地单机" }], "note": "架构表" },
+    { "id": "p05", "type": "positive", "question": "文档处理状态机里有哪些中间状态？", "relevant": [{ "contains": "向量化中" }], "note": "TODO 文档状态机" },
+    { "id": "p06", "type": "positive", "question": "单个文件最大能传多大？", "relevant": [{ "contains": "20MB" }], "note": "文件配额" },
+    { "id": "p07", "type": "positive", "question": "每个知识库最多放多少个文件？", "relevant": [{ "contains": "100 个文件" }], "note": "文件配额" },
+    { "id": "p08", "type": "positive", "question": "笔记编辑器用的是什么？", "relevant": [{ "contains": "CodeMirror" }], "note": "P3 编辑器选型" },
+    { "id": "p09", "type": "positive", "question": "精排用的是什么模型？", "relevant": [{ "contains": "bge-reranker-v2-m3" }], "note": "README 检索调优" },
+    { "id": "p10", "type": "positive", "question": "检索的相似度下限怎么标定？", "relevant": [{ "contains": "标定方法" }], "note": "README 检索调优" },
+    { "id": "p11", "type": "positive", "question": "长对话摘要累积多少条消息才重新合并一次？", "relevant": [{ "contains": "6 条" }], "note": "README 长对话摘要" },
+    { "id": "p12", "type": "positive", "question": "前端静态资源和 /api 反代是用什么做的？", "relevant": [{ "contains": "nginx" }], "note": "README 部署" },
+    { "id": "p13", "type": "positive", "question": "实施计划分哪几个阶段？", "relevant": [{ "contains": "P0" }], "note": "TODO 分阶段" },
+    { "id": "p14", "type": "positive", "question": "检索时怎么保证只查当前用户的数据？", "relevant": [{ "contains": "user_id" }], "note": "RAG 实施原则" },
+    { "id": "p15", "type": "positive", "question": "文档处理失败之后还能重试吗？", "relevant": [{ "contains": "重试" }], "note": "文档管理" },
+
+    { "id": "f01", "type": "followup", "followupOf": "p05", "question": "那失败了还能重试吗？", "relevant": [{ "contains": "重试" }], "note": "追问：脱离上文没有主语" },
+    { "id": "f02", "type": "followup", "followupOf": "p09", "question": "它和向量检索有什么区别？", "relevant": [{ "contains": "cross-encoder" }], "note": "追问：问的是精排模型" },
+    { "id": "f03", "type": "followup", "followupOf": "p04", "question": "查的时候会按什么过滤？", "relevant": [{ "contains": "user_id" }], "note": "追问：指代向量库" },
+
+    { "id": "n01", "type": "negative", "question": "红烧肉的做法是什么？", "relevant": [], "note": "语料里完全没有" },
+    { "id": "n02", "type": "negative", "question": "股票估值应该用市盈率还是市净率？", "relevant": [], "note": "语料里完全没有" },
+    { "id": "n03", "type": "negative", "question": "帮我写一段 Python 快速排序", "relevant": [], "note": "语料里完全没有" },
+    { "id": "n04", "type": "negative", "question": "今天北京的天气怎么样？", "relevant": [], "note": "语料里完全没有" },
+    { "id": "n05", "type": "negative", "question": "Kubernetes 集群怎么用 Docker Compose 部署？", "relevant": [], "note": "语料里完全没有（只提到 Docker 编排暂不考虑）" }
   ]
 }

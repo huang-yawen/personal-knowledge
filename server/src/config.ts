@@ -101,6 +101,9 @@ export const config = {
     uploadPerMinute: numberEnv("LIMIT_UPLOAD_PER_MINUTE", 10),
     apiPerMinute: numberEnv("LIMIT_API_PER_MINUTE", 300),
     dailyTokens: numberEnv("LIMIT_DAILY_TOKENS", 200_000),
+    // 演示账号是公开可访问的，给一个较小的每日额度，防止被拿来烧 token。
+    // 一次问答（含检索 + 追问建议）大约 2~4k token，这个额度够十几个问题
+    demoDailyTokens: numberEnv("LIMIT_DEMO_DAILY_TOKENS", 30_000),
     maxDocsPerUser: numberEnv("LIMIT_DOCS_PER_USER", 100),
     maxBytesPerUser: numberEnv("LIMIT_MB_PER_USER", 200) * 1024 * 1024,
   },

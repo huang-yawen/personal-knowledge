@@ -3,6 +3,7 @@ import type { RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
 import { currentUserId } from "../auth/context";
+import { isDemoUser } from "../auth/demo";
 
 export type UsageKind = "chat" | "followup" | "summary" | "note_ai" | "note_generate" | "doc_summary" | "ocr";
 
@@ -41,9 +42,14 @@ export const todayTokens = async (userId: number): Promise<number> => {
   return Number(rows[0].used);
 };
 
+// 每个用户的每日额度：演示账号用更小的上限
+export const dailyTokenLimit = async (userId: number) =>
+  (await isDemoUser(userId)) ? config.limits.demoDailyTokens : config.limits.dailyTokens;
+
 // 调用模型前检查每日额度，用完后直接拒绝
 export const dailyTokenQuota: RequestHandler = async (_req, res, next) => {
-  if ((await todayTokens(currentUserId())) >= config.limits.dailyTokens) {
+  const userId = currentUserId();
+  if ((await todayTokens(userId)) >= (await dailyTokenLimit(userId))) {
     res.status(429).json({ error: "今日模型额度已用完，请明天再试" });
     return;
   }

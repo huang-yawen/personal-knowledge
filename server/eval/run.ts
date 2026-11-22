@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+﻿import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { config } from "../src/config";
 import { pool } from "../src/db";
@@ -23,7 +23,7 @@ type Case = {
   note?: string;
 };
 
-type Dataset = { version: number; knowledgeBaseIds: number[]; cases: Case[] };
+type Dataset = { version: number; userId?: number; knowledgeBaseIds: number[]; cases: Case[] };
 
 type CaseResult = {
   id: string;
@@ -33,6 +33,8 @@ type CaseResult = {
   rank: number;
   // 进入提示词的条数（TOP_K 以内）
   returned: number;
+  // 最终顺序对应的向量相似度与精排分，用于标定阈值
+  scores: number[];
   ms: number;
   stats: RetrievalStats;
   degraded?: string;
@@ -65,7 +67,7 @@ const main = async () => {
   const datasetPath = path.join(import.meta.dirname, "dataset.json");
   const dataset = JSON.parse(await readFile(datasetPath, "utf8")) as Dataset;
   const byId = new Map(dataset.cases.map((item) => [item.id, item]));
-  const userId = config.legacyUserId;
+  const userId = dataset.userId ?? config.legacyUserId;
 
   console.log(`评估集：${dataset.cases.length} 条，知识库 ${dataset.knowledgeBaseIds.join(", ")}，用户 ${userId}`);
   console.log(`每道题召回 ${RECALL_LIMIT} 条，截断到前 ${TOP_K} 条作为「进入提示词」的结果`);
@@ -93,6 +95,7 @@ const main = async () => {
         question: item.question,
         rank: 0,
         returned: 0,
+        scores: [],
         ms: Date.now() - startedAt,
         stats,
         degraded: error instanceof Error ? error.message : String(error),
@@ -106,6 +109,7 @@ const main = async () => {
       question: item.question,
       rank: item.type === "negative" ? 0 : findRank(chunks, item.relevant.map((r) => r.contains)),
       returned: Math.min(chunks.length, TOP_K),
+      scores: chunks.map((chunk) => Number(chunk.score.toFixed(3))),
       ms: Date.now() - startedAt,
       stats,
     });

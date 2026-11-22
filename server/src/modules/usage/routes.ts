@@ -1,9 +1,8 @@
 import { Router } from "express";
 import type { RowDataPacket } from "mysql2";
-import { config } from "../../config";
 import { pool } from "../../db";
 import { currentUserId } from "../auth/context";
-import { todayTokens } from "./index";
+import { dailyTokenLimit, todayTokens } from "./index";
 
 export const statsRouter = Router();
 
@@ -41,6 +40,6 @@ statsRouter.get("/", async (_req, res) => {
     chunks,
     notes,
     notesMonth,
-    tokens: { today: tokensToday, month: tokensMonth, total: tokensTotal, dailyLimit: config.limits.dailyTokens },
+    tokens: { today: tokensToday, month: tokensMonth, total: tokensTotal, dailyLimit: await dailyTokenLimit(userId) },
   });
 });
