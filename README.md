@@ -8,6 +8,16 @@
 - 多用户：用户名 + 密码登录，注册需要一次性邀请码；每个用户的数据相互隔离。
 - 每用户有限流与每日 token 额度、文档数与存储量配额（默认值见 `server/.env.example`）。
 
+## 界面
+
+| 工作台 | AI 对话（严格模式：资料不足时明确拒答，不编造） |
+| --- | --- |
+| ![工作台](docs/screenshots/dashboard.png) | ![AI 对话](docs/screenshots/chat.png) |
+| **我的知识库**（文档处理状态、上传、重命名、重试） | **阅读抽屉**（按分块展示原文，可定位到被引用的片段） |
+| ![我的知识库](docs/screenshots/knowledge.png) | ![阅读抽屉](docs/screenshots/reader.png) |
+| **我的笔记**（Markdown 编辑 + AI 辅助） | |
+| ![我的笔记](docs/screenshots/notes.png) | |
+
 ## 技术栈
 
 - 前端：React 19 + TypeScript + Vite + Tailwind CSS 4 + shadcn/ui（Base UI）+ assistant-ui + zustand + react-router
