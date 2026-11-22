@@ -121,6 +121,26 @@ RERANK_MIN_SCORE=0.1
 - 内存紧张的小机器建议加 swap；两个 systemd 服务都设了 `MemoryMax`。
 - 日志为 JSON 行：`journalctl -u personal-knowledge -o cat | grep '"event":"request"'`；问答另有 `"event":"chat"`（含检索命中、耗时、token，不含问题与回答内容）。
 
+### 日常更新（一键部署）
+
+服务器上的 `/opt/personal-knowledge` 是 git 仓库，本地用脚本完成「构建 → 上传 → 拉取 → 迁移 → 重启」：
+
+```powershell
+./scripts/deploy.ps1                  # 完整部署（前端 + 后端）
+./scripts/deploy.ps1 -SkipFrontend    # 只更新后端（前端没改动时）
+./scripts/deploy.ps1 -SkipBuild       # 复用上次 dist，不重新构建
+```
+
+脚本要求本机能 SSH 到服务器（默认用 `~/.ssh/id_ed25519_pk`，没有则回退到密码）。**注意：某些代理客户端会拦截 22 端口，需要给服务器 IP 加直连规则。**
+
+服务端步骤在 `scripts/deploy-remote.sh`，单独执行也可以：
+
+```bash
+cd /opt/personal-knowledge && SKIP_FRONTEND=1 bash /tmp/deploy-remote.sh
+```
+
+脚本只在 `package-lock.json` 变化时才 `npm ci`；迁移用 `npm run migrate`（幂等，已应用的会跳过）。前端旧的构建产物会保留在 `dist.prev`，出问题可以立刻切回。
+
 ### 备份与恢复
 
 - 备份：`crontab -e` 加 `30 3 * * * /opt/personal-knowledge/deploy/backup.sh >> /var/log/pk-backup.log 2>&1`。产物在 `/var/backups/personal-knowledge/`（`db-*.sql.gz`、`uploads-*.tgz`）。建议再定期拷贝一份到别的机器。
