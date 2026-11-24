@@ -384,6 +384,14 @@ a.nav-item:visited { color: var(--text); }
 /* 回答依据说明：区分来自知识库还是通用知识 */
 .message-basis { margin-top: 8px; display: flex; align-items: flex-start; gap: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .message-basis svg { flex: none; margin-top: 2px; }
+.message-citation-warning { margin-top: 6px; color: var(--accent-red); font-size: 12px; }
+
+/* 正文引用角标：来源到达前中性，到达后可点击，对不上资料时标红 */
+.citation-sup { white-space: nowrap; }
+.citation-mark { min-width: 17px; height: 17px; margin: 0 1px; padding: 0 4px; display: inline-block; border: 0; border-radius: 9px; background: var(--blue-soft); color: var(--blue); font-size: 10px; font-weight: 650; line-height: 17px; text-align: center; cursor: pointer; }
+.citation-mark:hover { background: var(--blue); color: var(--on-accent); }
+.citation-pending { margin: 0 1px; padding: 0 3px; color: var(--muted); font-size: 10px; }
+.citation-invalid { margin: 0 1px; padding: 0 4px; border-radius: 8px; background: var(--accent-red-tint); color: var(--accent-red); font-size: 10px; font-weight: 650; }
 /* 用户中途停止生成的那条回答 */
 .message-incomplete { margin-top: 8px; display: flex; align-items: center; gap: 6px; color: var(--status-pending); font-size: 12px; }
 

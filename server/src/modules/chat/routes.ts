@@ -221,6 +221,8 @@ chatRouter.post("/", async (req, res) => {
   let topScore: number | undefined;
   let usage: Usage | undefined;
   let answer = "";
+  // 回答里引用了、但不存在于本次资料列表的编号数；只记日志，用于观察引用幻觉
+  let invalidCitations = 0;
   // 中止时要在这里保存已生成的内容，所以放到 try 外面
   let activeConversationId: number | undefined;
   let retrieved: (RetrievedChunk & { index: number })[] = [];
@@ -276,6 +278,7 @@ chatRouter.post("/", async (req, res) => {
     usage = await streamAnswer(messages.slice(-config.chat.maxHistoryMessages), chunks, settings.replyStyle, { strict: settings.strictMode, instructions, historySummary }, controller.signal, onDelta);
     // 只展示回答里真正用 [编号] 引用到的来源；模型用自身知识回答时没有来源
     const cited = citedIndexes(answer);
+    invalidCitations = [...cited].filter((index) => index < 1 || index > retrieved.length).length;
     const sources = retrieved.filter((source) => cited.has(source.index));
     writeEvent(res, { type: "sources", sources });
     // 完整结束后保存；中途被停止的在 catch 里另存一份并标记为未完成
@@ -301,6 +304,7 @@ chatRouter.post("/", async (req, res) => {
       // 用户点了停止或关掉页面：把已经生成的部分存下来并标记为未完成。
       // 不存的话刷新后这段内容凭空消失，用户会以为白等了。
       const cited = citedIndexes(answer);
+      invalidCitations = [...cited].filter((index) => index < 1 || index > retrieved.length).length;
       const sources = retrieved.filter((source) => cited.has(source.index));
       await saveAssistantMessage(activeConversationId, answer, sources, true).catch((saveError: unknown) =>
         console.error("保存中止的回答失败", saveError),
@@ -334,6 +338,8 @@ chatRouter.post("/", async (req, res) => {
         keywordHits: retrievalStats.keywordHits,
         hits,
         scores,
+        // 引用了不存在的编号（模型幻觉），前端会标红并汇总提示
+        invalidCitations,
         topScore: topScore === undefined ? null : Number(topScore.toFixed(3)),
         minScore: config.retrieval.minScore,
         // 精排：applied=实际调用了，degraded=服务不可用已退回向量排序，shadow=只记录未改变结果

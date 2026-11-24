@@ -114,11 +114,12 @@
 - 前端按路由做代码分割（`src/lib/pages.ts`）：首屏只加载工作台，对话页（assistant-ui）和笔记页（CodeMirror + react-markdown）在进入时才下载，侧栏悬停/聚焦会预取。首屏 JS 从 1947 kB（gzip 618 kB）降到约 453 kB（gzip 147 kB）。
 - 停止生成时保留已生成内容：迁移 014 给 `messages` 加 `incomplete`，中止的回答存库并标记，前端显示「已停止生成」，不再静默丢弃。
 - 长对话滚动摘要：迁移 015 给 `conversations` 加 `summary` / `summary_until_message_id`，滑出最近 10 条窗口的早期消息压缩成摘要随提示词下发，回答结束后异步刷新（`server/src/modules/conversation/summary.ts`）。
-- 前端测试：vitest 分两层——纯逻辑（路由匹配、页面映射、chat-store、错误文案）跑 node 环境；组件渲染（焦点锁、Markdown 渲染、错误边界）用 happy-dom + testing-library。共 30 个用例，`pnpm test` 已接入 CI。
+- 前端测试：vitest 分两层——纯逻辑（路由匹配、页面映射、chat-store、错误文案）跑 node 环境；组件渲染（焦点锁、Markdown 渲染、错误边界）用 happy-dom + testing-library。共 39 个用例，`pnpm test` 已接入 CI。
 - 可访问性：新增 `useFocusTrap`（模态层/抽屉打开时焦点进入并在内部循环、关闭后还给触发元素）与 `useEscapeKey`（下拉菜单与弹窗按 Esc 关闭），应用到文档阅读抽屉、知识库两个弹窗、对话总结弹窗和四个下拉菜单。DESIGN.md 第 7 节的「焦点进入与返回」落地。
 - 混合检索：向量召回之外加一路 MySQL ngram 全文检索，用 RRF 融合名次（`RETRIEVAL_HYBRID`，默认关闭）。实测在语义型评估集上没有收益（23 条里只有 2 条命中关键词路），价值在含精确标识符的查询，因此默认不开。
 - 问答流式阶段提示：SSE 新增 `stage` 事件（`retrieving` → `reranking` → `generating`，`generating` 带命中数）与 15 秒心跳；前端在对话工具栏显示当前阶段，不写入消息内容。
 - 回答反馈：assistant-ui 的点赞/点踩接入 `message_feedback`（迁移 019）；点踩先落库再弹原因，可补充说明并覆盖上一次；SSE 新增 `saved` 事件把消息 id 带回前端，历史消息打开对话时也带 id。
+- 行内引用：remark 插件把正文里的 `[1]` / `[2, 3]` 转成 `#cite-` 链接，前端渲染为可点击角标；生成中显示中性角标，无效编号标红并在来源下方汇总提示；服务端日志新增 `invalidCitations`。
 - 导出个人数据改为流式：分页读取分块与消息、边查边写到 `server/tmp/`，写完再 `res.sendFile` 发送，内存占用与账号数据量无关。原实现把全部分块读进内存再 `JSON.stringify`，在生产配置 `MemoryMax=400M` 下，大账号导出会把后端进程打挂。
 
 ## 6. RAG 实施原则

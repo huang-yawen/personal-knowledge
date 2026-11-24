@@ -1,6 +1,7 @@
 import { BookOpen, Lightbulb } from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
 import type { ChatSource } from "@/lib/api";
+import { countInvalidCitations } from "@/lib/citations";
 import { useReaderStore } from "@/lib/reader-store";
 
 // 模型用自身知识写的段落以这个标记开头（见 server 的提示词）
@@ -34,6 +35,8 @@ export function MessageSources() {
   const hasSources = Boolean(sources && sources.length > 0);
   const isStrictEmpty = !hasSources && STRICT_EMPTY_MARKS.some((mark) => text.includes(mark));
   const note = basisNotes[isStrictEmpty ? "strictEmpty" : !hasSources ? "general" : text.includes(GENERAL_MARK) ? "mixed" : "knowledge"];
+  // 回答引用了不存在的编号：正文里标红，这里给一句汇总说明
+  const invalidCitations = incomplete ? 0 : countInvalidCitations(text, sources ?? []);
 
   return (
     <div className="message-basis-wrap">
@@ -53,6 +56,11 @@ export function MessageSources() {
             </button>
           ))}
         </div>
+      )}
+      {invalidCitations > 0 && (
+        <p className="message-citation-warning" role="status">
+          有 {invalidCitations} 处引用无法对应资料
+        </p>
       )}
       {incomplete ? (
         <p className="message-incomplete">已停止生成，以上内容不完整</p>
