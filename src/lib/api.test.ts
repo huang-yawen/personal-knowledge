@@ -28,6 +28,7 @@ test("解析阶段事件，忽略心跳注释，并正确处理跨分片的事�
           'data: {"type":"stage","stage":"gene',
           'rating","hits":3}\n\n',
           'data: {"type":"delta","text":"你好"}\n\n',
+          'data: {"type":"saved","messageId":42}\n\n',
           'data: {"type":"done"}\n\n',
         ]),
         { status: 200 },
@@ -44,6 +45,7 @@ test("解析阶段事件，忽略心跳注释，并正确处理跨分片的事�
     { type: "stage", stage: "retrieving" },
     { type: "stage", stage: "generating", hits: 3 },
     { type: "delta", text: "你好" },
+    { type: "saved", messageId: 42 },
     { type: "done" },
   ]);
 });

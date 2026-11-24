@@ -84,6 +84,8 @@ export type ChatEvent =
   | { type: "sources"; sources: ChatSource[] }
   | { type: "delta"; text: string }
   | { type: "followups"; items: string[] }
+  // 回答已落库，带回消息 id；之后点踩要用它关联反馈
+  | { type: "saved"; messageId: number }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -122,8 +124,27 @@ export async function* streamChat(
   }
 }
 
-export type ConversationDto = {
-  id: number;
+export type MessageFeedbackRating = "positive" | "negative";
+
+export type MessageFeedbackReason =
+  | "off_topic"
+  | "outdated"
+  | "not_found"
+  | "wrong_citation"
+  | "incomplete"
+  | "other";
+
+export type MessageFeedbackInput = {
+  rating: MessageFeedbackRating;
+  reason?: MessageFeedbackReason;
+  comment?: string;
+};
+
+// 给某条回答点赞/点踩；同一条消息重复提交会覆盖上一次（例如点踩后补充原因）
+export const submitMessageFeedback = (messageId: number, input: MessageFeedbackInput) =>
+  request<void>(`/messages/${messageId}/feedback`, { method: "POST", body: JSON.stringify(input) });
+
+export type ConversationDto = {  id: number;
   title: string;
   // 检索范围，空数组表示全部知识库
   knowledgeBaseIds: number[];

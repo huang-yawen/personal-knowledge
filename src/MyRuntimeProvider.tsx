@@ -3,14 +3,36 @@ import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   type ChatModelAdapter,
+  type FeedbackAdapter,
   type ThreadMessageLike,
 } from "@assistant-ui/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { streamChat, type ChatSource } from "@/lib/api";
+import { streamChat, submitMessageFeedback, type ChatSource } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
+import { useFeedbackStore } from "@/lib/feedback-store";
+import { errorMessage } from "@/lib/utils";
 
 // 后端对话接口只接收文字；这些是它收不了的内容类型（粘贴图片等仍可能产生）
 const ATTACHMENT_PARTS = new Set(["file", "image", "audio"]);
+
+// 点赞/点踩：assistant-ui 的按钮已在 thread.aui.tsx 里，这里只负责把结果落库。
+// 点踩先记「没帮助」，再弹窗让用户补原因；即使关掉弹窗，这条负反馈也不会丢。
+const feedbackAdapter: FeedbackAdapter = {
+  submit: async ({ message, type }) => {
+    const messageId = (message.metadata?.custom as { messageId?: number } | undefined)?.messageId;
+    if (typeof messageId !== "number") {
+      useFeedbackStore.getState().notify("这条回答还没有保存完成，暂时无法反馈", "error");
+      return;
+    }
+    try {
+      await submitMessageFeedback(messageId, { rating: type });
+      if (type === "negative") useFeedbackStore.getState().open(messageId);
+      else useFeedbackStore.getState().notify("感谢反馈", "success");
+    } catch (reason) {
+      useFeedbackStore.getState().notify(errorMessage(reason), "error");
+    }
+  },
+};
 
 // 调用后端 /api/chat：先收到对话 id 和引用来源，再逐段收到回答文字
 const chatAdapter: ChatModelAdapter = {
@@ -37,6 +59,11 @@ const chatAdapter: ChatModelAdapter = {
     let text = "";
     let sources: ChatSource[] = [];
     let followups: string[] = [];
+    // 回答落库后由 saved 事件带回，写进消息 metadata 供点踩使用
+    let messageId: number | undefined;
+    const messageMetadata = () => ({
+      custom: { sources, followups, ...(messageId === undefined ? {} : { messageId }) },
+    });
     try {
       for await (const event of streamChat(history, knowledgeBaseIds, conversationId, abortSignal)) {
         if (event.type === "conversation") {
@@ -48,13 +75,17 @@ const chatAdapter: ChatModelAdapter = {
           sources = event.sources;
           if (isCurrentThread()) setSources(event.sources);
           // 来源在回答结束后才到达，需要再更新一次消息才能显示出来
-          yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+          yield { content: [{ type: "text", text }], metadata: messageMetadata() };
         } else if (event.type === "delta") {
           text += event.text;
-          yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+          yield { content: [{ type: "text", text }], metadata: messageMetadata() };
+        } else if (event.type === "saved") {
+          messageId = event.messageId;
+          // 再推一次消息，把 id 带进 metadata；不改变正文
+          yield { content: [{ type: "text", text }], metadata: messageMetadata() };
         } else if (event.type === "followups") {
           followups = event.items;
-          yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+          yield { content: [{ type: "text", text }], metadata: messageMetadata() };
         } else if (event.type === "done") {
           // 刷新列表，让新对话出现、标题和排序更新
           useChatStore.getState().loadConversations().catch(console.error);
@@ -68,6 +99,7 @@ const chatAdapter: ChatModelAdapter = {
 };
 
 export function MyRuntimeProvider({ children, initialMessages }: { children: ReactNode; initialMessages: ThreadMessageLike[] }) {
-  const runtime = useLocalRuntime(chatAdapter, { initialMessages });
+  // 传了 feedback adapter 后，thread.aui.tsx 里的点赞/点踩按钮才会显示
+  const runtime = useLocalRuntime(chatAdapter, { initialMessages, adapters: { feedback: feedbackAdapter } });
   return <AssistantRuntimeProvider runtime={runtime}><TooltipProvider>{children}</TooltipProvider></AssistantRuntimeProvider>;
 }

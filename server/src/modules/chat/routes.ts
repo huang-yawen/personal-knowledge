@@ -279,7 +279,11 @@ chatRouter.post("/", async (req, res) => {
     const sources = retrieved.filter((source) => cited.has(source.index));
     writeEvent(res, { type: "sources", sources });
     // 完整结束后保存；中途被停止的在 catch 里另存一份并标记为未完成
-    if (answer) await saveAssistantMessage(activeConversationId, answer, sources);
+    if (answer) {
+      const messageId = await saveAssistantMessage(activeConversationId, answer, sources);
+      // 告诉前端这条回答的消息 id，点踩时用它关联反馈
+      writeEvent(res, { type: "saved", messageId });
+    }
     // 追问建议不入库，仅随本次回答展示
     if (answer && !controller.signal.aborted) {
       const followupStartedAt = Date.now();

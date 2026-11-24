@@ -54,6 +54,25 @@ a.nav-item:visited { color: var(--text); }
 @keyframes chat-stage-pulse { 0%, 100% { opacity: .35; transform: scale(.9); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .chat-stage-dot { animation: none; opacity: .8; } }
 @media (max-width: 760px) { .chat-stage { max-width: 58%; padding: 0 8px; font-size: 11px; } }
+
+/* 点踩原因弹窗与反馈提示 */
+.feedback-layer { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; }
+.feedback-dialog { position: relative; width: min(100%, 460px); padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 22px 70px rgba(0, 0, 0, .2); }
+.feedback-dialog h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.03em; }
+.feedback-dialog > p { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.feedback-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.feedback-reasons button { height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface-soft); color: var(--text); font-size: 12px; cursor: pointer; }
+.feedback-reasons button:hover { border-color: var(--blue); }
+.feedback-reasons button.selected { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+.feedback-dialog textarea { width: 100%; min-height: 72px; margin-top: 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); color: var(--text); font: inherit; font-size: 13px; resize: vertical; outline: none; }
+.feedback-dialog textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.feedback-dialog .form-error { margin-top: 10px; }
+.feedback-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.feedback-actions button { height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--surface-soft); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+.feedback-actions .modal-primary { background: var(--blue); color: var(--on-accent); }
+.feedback-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.feedback-notice { position: fixed; left: 50%; bottom: 28px; z-index: 70; transform: translateX(-50%); padding: 9px 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); color: var(--text); font-size: 12px; }
+.feedback-notice.error { border-color: color-mix(in srgb, var(--accent-red) 40%, var(--line)); color: var(--accent-red); }
 .library-selector { height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; font-size: 16px; font-weight: 600; }
 .library-selector:hover { background: var(--hover); }
 .chat-workspace { grid-template-columns: minmax(0, 1fr); }

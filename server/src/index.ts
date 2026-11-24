@@ -22,6 +22,7 @@ import { statsRouter } from "./modules/usage/routes";
 import { settingsRouter } from "./modules/settings/routes";
 import { accountRouter } from "./modules/account/routes";
 import { adminRouter } from "./modules/admin/routes";
+import { feedbackRouter } from "./modules/feedback/routes";
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.post("/api/notes/ai", ...aiGuard);
 app.post("/api/notes/generate", ...aiGuard);
 app.post("/api/conversations/:id/summary", ...aiGuard);
 app.get("/api/account/export", userRateLimit("export", 3));
+app.post("/api/messages/:id/feedback", userRateLimit("feedback", 30));
 const uploadLimit = userRateLimit("upload", config.limits.uploadPerMinute);
 app.post("/api/knowledge-bases/:id/documents", uploadLimit);
 app.post("/api/documents/:id/retry", uploadLimit);
@@ -94,6 +96,7 @@ app.use("/api", activityRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/conversations", conversationRouter);
 app.use("/api/notes", noteRouter);
+app.use("/api", feedbackRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/account", accountRouter);

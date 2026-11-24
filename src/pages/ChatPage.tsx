@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ChevronDown, LibraryBig, Sparkles } from "lucide-react";
 import { useAui } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { FeedbackDialog } from "@/components/FeedbackDialog";
+import { FeedbackNotice } from "@/components/FeedbackNotice";
 import { listKnowledgeBases, type KnowledgeBaseDto } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 import { MyRuntimeProvider } from "@/MyRuntimeProvider";
@@ -66,6 +68,8 @@ export function ChatPage() {
           </MyRuntimeProvider>
         </section>
       </div>
+      <FeedbackDialog />
+      <FeedbackNotice />
     </div>
   );
 }

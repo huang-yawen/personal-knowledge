@@ -81,9 +81,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         id: String(message.id),
         role: message.role,
         content: message.content,
+        // 助手消息始终带 messageId：历史回答也要能点赞/点踩
         metadata:
-          message.citations || message.incomplete
-            ? { custom: { sources: message.citations ?? [], incomplete: message.incomplete } }
+          message.role === "assistant"
+            ? { custom: { messageId: message.id, sources: message.citations ?? [], incomplete: message.incomplete } }
             : undefined,
       })),
       threadKey: state.threadKey + 1,

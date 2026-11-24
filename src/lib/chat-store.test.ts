@@ -92,7 +92,7 @@ test("消息的引用写进 metadata，用户消息不需要 metadata", async ()
 
   const [user, assistant] = useChatStore.getState().initialMessages;
   expect(user.metadata).toBeUndefined();
-  expect(assistant.metadata).toEqual({ custom: { sources: [source], incomplete: false } });
+  expect(assistant.metadata).toEqual({ custom: { messageId: 2, sources: [source], incomplete: false } });
 });
 
 test("被停止的回答带上 incomplete 标记，暂停后刷新仍能提示内容不完整", async () => {
@@ -101,7 +101,7 @@ test("被停止的回答带上 incomplete 标记，暂停后刷新仍能提示�
 
   const state = useChatStore.getState();
   expect(state.initialMessages).toHaveLength(3);
-  expect(state.initialMessages[2].metadata).toEqual({ custom: { sources: [], incomplete: true } });
+  expect(state.initialMessages[2].metadata).toEqual({ custom: { messageId: 3, sources: [], incomplete: true } });
   // 最后一条没有引用，所以来源面板为空——这是预期行为
   expect(state.sources).toEqual([]);
 });
