@@ -85,7 +85,7 @@ export type ChatEvent =
   | { type: "delta"; text: string }
   | { type: "followups"; items: string[] }
   // 回答已落库，带回消息 id；之后点踩要用它关联反馈
-  | { type: "saved"; messageId: number }
+  | { type: "saved"; messageId: number; retrievalMeta?: RetrievalMeta }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -126,6 +126,36 @@ export async function* streamChat(
 
 export type MessageFeedbackRating = "positive" | "negative";
 
+// 一条回答的检索诊断：分块、分数、耗时和当时的配置，用于回放坏例
+export type RetrievalMeta = {
+  retrievalQuery: string;
+  rewritten: boolean;
+  invalidCitations: number;
+  stages: {
+    retrievalMs: number | null;
+    firstTokenMs: number | null;
+    followupMs: number | null;
+    totalMs: number;
+  };
+  retrieval: {
+    candidates: number;
+    filtered: number;
+    keywordHits: number;
+    scores: number[];
+    topScore: number | null;
+    rerank: { applied: boolean; degraded: boolean; ms: number | null; scores: number[] | null };
+  };
+  chunks: {
+    chunkId: number;
+    documentId: number;
+    documentName: string;
+    page: number | null;
+    score: number;
+    rerankScore: number | null;
+    matchedBy: "dense" | "keyword" | "both";
+  }[];
+  config: Record<string, unknown>;
+};
 export type MessageFeedbackReason =
   | "off_topic"
   | "outdated"
@@ -162,6 +192,8 @@ export type ConversationDetailDto = ConversationDto & {
     citations: ChatSource[] | null;
     // 用户中途停止生成，这条回答不完整
     incomplete: boolean;
+    // 本条回答的检索诊断；老消息没有
+    retrievalMeta: RetrievalMeta | null;
   }[];
 };
 

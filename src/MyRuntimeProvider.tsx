@@ -7,7 +7,7 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { streamChat, submitMessageFeedback, type ChatSource } from "@/lib/api";
+import { streamChat, submitMessageFeedback, type ChatSource, type RetrievalMeta } from "@/lib/api";
 import { useChatStore } from "@/lib/chat-store";
 import { useFeedbackStore } from "@/lib/feedback-store";
 import { errorMessage } from "@/lib/utils";
@@ -59,10 +59,16 @@ const chatAdapter: ChatModelAdapter = {
     let text = "";
     let sources: ChatSource[] = [];
     let followups: string[] = [];
-    // 回答落库后由 saved 事件带回，写进消息 metadata 供点踩使用
+    // 回答落库后由 saved 事件带回，写进消息 metadata 供点踩和诊断使用
     let messageId: number | undefined;
+    let retrievalMeta: RetrievalMeta | undefined;
     const messageMetadata = () => ({
-      custom: { sources, followups, ...(messageId === undefined ? {} : { messageId }) },
+      custom: {
+        sources,
+        followups,
+        ...(messageId === undefined ? {} : { messageId }),
+        ...(retrievalMeta === undefined ? {} : { retrievalMeta }),
+      },
     });
     try {
       for await (const event of streamChat(history, knowledgeBaseIds, conversationId, abortSignal)) {
@@ -81,7 +87,8 @@ const chatAdapter: ChatModelAdapter = {
           yield { content: [{ type: "text", text }], metadata: messageMetadata() };
         } else if (event.type === "saved") {
           messageId = event.messageId;
-          // 再推一次消息，把 id 带进 metadata；不改变正文
+          retrievalMeta = event.retrievalMeta;
+          // 再推一次消息，把 id 和检索诊断带进 metadata；不改变正文
           yield { content: [{ type: "text", text }], metadata: messageMetadata() };
         } else if (event.type === "followups") {
           followups = event.items;

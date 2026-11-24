@@ -1,6 +1,9 @@
 import type { RetrievedChunk } from "../rag/retrieve";
 import type { ReplyStyle } from "../settings/repository";
 
+// 提示词版本：改提示词结构或规则时改这里，检索诊断里能区分新旧回答
+export const PROMPT_VERSION = "v1";
+
 // 用户在个人中心选择的回复风格；平衡为默认，不额外约束
 const STYLE_HINTS: Record<ReplyStyle, string> = {
   concise: "\n\n回答风格：尽量简洁，直接给结论和要点，一般不超过 200 字，除非用户明确要求展开。",

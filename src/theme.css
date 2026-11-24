@@ -385,6 +385,9 @@ a.nav-item:visited { color: var(--text); }
 .message-basis { margin-top: 8px; display: flex; align-items: flex-start; gap: 6px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .message-basis svg { flex: none; margin-top: 2px; }
 .message-citation-warning { margin-top: 6px; color: var(--accent-red); font-size: 12px; }
+.message-diagnostic { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.message-diagnostic summary { cursor: pointer; }
+.message-diagnostic pre { margin-top: 6px; max-height: 260px; overflow: auto; padding: 10px; border-radius: 9px; background: var(--surface-soft); color: var(--text); font-size: 11px; line-height: 1.5; white-space: pre-wrap; }
 
 /* 正文引用角标：来源到达前中性，到达后可点击，对不上资料时标红 */
 .citation-sup { white-space: nowrap; }

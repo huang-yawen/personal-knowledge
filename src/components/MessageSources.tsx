@@ -1,6 +1,6 @@
 import { BookOpen, Lightbulb } from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
-import type { ChatSource } from "@/lib/api";
+import type { ChatSource, RetrievalMeta } from "@/lib/api";
 import { countInvalidCitations } from "@/lib/citations";
 import { useReaderStore } from "@/lib/reader-store";
 
@@ -29,6 +29,8 @@ export function MessageSources() {
   const text = useAuiState((s) => s.message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(""));
   // 最新一条回答还在生成时先不显示，避免说明随内容跳变
   const isStreaming = useAuiState((s) => s.thread.isRunning && s.message.isLast);
+  // 本条回答的检索诊断：点踩或反馈时可以直接展开看当时检索了什么、命中了哪些分块
+  const retrievalMeta = useAuiState((s) => s.message.metadata.custom?.retrievalMeta) as RetrievalMeta | undefined;
   const openReader = useReaderStore((state) => state.open);
   if (isStreaming || !text.trim()) return null;
 
@@ -68,6 +70,12 @@ export function MessageSources() {
         <p className="message-basis">
           <note.Icon size={13} /> {note.text}
         </p>
+      )}
+      {retrievalMeta && (
+        <details className="message-diagnostic">
+          <summary>检索诊断</summary>
+          <pre>{JSON.stringify(retrievalMeta, null, 2)}</pre>
+        </details>
       )}
     </div>
   );

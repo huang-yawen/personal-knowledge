@@ -17,6 +17,8 @@ export type RetrievedChunk = {
   content: string;
   // 向量相似度；只被关键词命中的分块没有余弦相似度，这里是 0
   score: number;
+  // 精排后的相关性分；未开启精排或精排降级时没有
+  rerankScore?: number;
   // 这一条是从哪一路检索到的
   matchedBy: "dense" | "keyword" | "both";
 };

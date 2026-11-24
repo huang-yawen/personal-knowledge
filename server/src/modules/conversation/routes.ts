@@ -55,7 +55,7 @@ conversationRouter.get("/:id", async (req, res) => {
     return;
   }
   const [messages] = await pool.query<RowDataPacket[]>(
-    "SELECT id, role, content, citations, incomplete FROM messages WHERE conversation_id = ? ORDER BY id",
+    "SELECT id, role, content, citations, retrieval_meta AS retrievalMeta, incomplete FROM messages WHERE conversation_id = ? ORDER BY id",
     [id],
   );
   // MySQL 的 TINYINT 返回 0/1，转成布尔值给前端

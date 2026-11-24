@@ -1,6 +1,9 @@
 const CHUNK_SIZE = 800;
 const OVERLAP = 100;
 
+// 切片策略版本：换切块规则时改这里，检索诊断里就能区分新旧消息
+export const CHUNKER_VERSION = "v1";
+
 // 按固定窗口切块，相邻块重叠一小段，避免一句话被切断后丢失上下文
 export const chunkText = (text: string): string[] => {
   const clean = text

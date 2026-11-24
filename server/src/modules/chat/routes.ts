@@ -24,8 +24,9 @@ import {
 } from "../conversation/repository";
 import { estimateTokens, recordUsage } from "../usage";
 import { getSettings, type ReplyStyle } from "../settings/repository";
-import { buildSystemPrompt, type PromptOptions } from "./prompt";
+import { buildSystemPrompt, PROMPT_VERSION, type PromptOptions } from "./prompt";
 import { loadConversationSummary, refreshConversationSummary } from "../conversation/summary";
+import { CHUNKER_VERSION } from "../worker/chunk";
 
 type Usage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 
@@ -230,6 +231,69 @@ chatRouter.post("/", async (req, res) => {
   let retrievalMs: number | undefined;
   let firstTokenMs: number | undefined;
   let followupMs: number | undefined;
+  // 本次请求实际生效的 AI 设置，写进检索诊断
+  let requestSettings: { topK: number; strictMode: boolean; replyStyle: ReplyStyle } | undefined;
+
+  const truncate = (text: string, max: number) => Array.from(text).slice(0, max).join("");
+  // 一条回答的检索诊断：出问题时能按当时的分块、分数和配置回放，而不是只靠日志
+  const buildRetrievalMeta = () => ({
+    retrievalQuery: truncate(retrievalQuery, 2000),
+    rewritten: retrievalQuery !== question,
+    invalidCitations,
+    stages: {
+      retrievalMs: retrievalMs ?? null,
+      firstTokenMs: firstTokenMs ?? null,
+      followupMs: followupMs ?? null,
+      totalMs: Date.now() - startedAt,
+    },
+    retrieval: {
+      candidates: retrievalStats.candidates,
+      filtered: retrievalStats.filtered,
+      keywordHits: retrievalStats.keywordHits,
+      scores,
+      topScore: topScore === undefined ? null : Number(topScore.toFixed(3)),
+      rerank: {
+        applied: retrievalStats.rerankApplied,
+        degraded: retrievalStats.rerankDegraded,
+        ms: retrievalStats.rerankMs,
+        scores: retrievalStats.rerankScores,
+      },
+    },
+    chunks: retrieved.map((chunk) => ({
+      chunkId: chunk.chunkId,
+      documentId: chunk.documentId,
+      documentName: chunk.documentName,
+      page: chunk.page,
+      score: Number(chunk.score.toFixed(3)),
+      rerankScore: chunk.rerankScore === undefined ? null : Number(chunk.rerankScore.toFixed(3)),
+      matchedBy: chunk.matchedBy,
+    })),
+    config: {
+      topK: requestSettings?.topK ?? config.retrieval.topK,
+      strictMode: requestSettings?.strictMode ?? false,
+      replyStyle: requestSettings?.replyStyle ?? "balanced",
+      minScore: config.retrieval.minScore,
+      recallMinScore: config.retrieval.recallMinScore,
+      recallMultiplier: config.retrieval.recallMultiplier,
+      maxCandidates: config.retrieval.maxCandidates,
+      hybrid: {
+        enabled: config.retrieval.hybrid.enabled,
+        keywordLimit: config.retrieval.hybrid.keywordLimit,
+        rrfK: config.retrieval.hybrid.rrfK,
+      },
+      rerank: {
+        enabled: config.rerank.enabled,
+        shadow: config.rerank.shadow,
+        model: config.rerank.model,
+        minScore: config.rerank.minScore ?? null,
+        timeoutMs: config.rerank.timeoutMs,
+      },
+      embeddingModel: config.embedding.model,
+      chatModel: config.deepseek.model,
+      chunkerVersion: CHUNKER_VERSION,
+      promptVersion: PROMPT_VERSION,
+    },
+  });
   try {
     // 先落库：保存用户的提问，并让库里的历史与界面一致（含重新生成、编辑后重发的情况）
     activeConversationId =
@@ -239,6 +303,7 @@ chatRouter.post("/", async (req, res) => {
     writeEvent(res, { type: "conversation", id: activeConversationId });
 
     const settings = await getSettings();
+    requestSettings = { topK: settings.topK, strictMode: settings.strictMode, replyStyle: settings.replyStyle };
     // 更早的对话被压缩成的摘要：长对话里最近 N 条之外的内容靠它传下去
     const historySummary = await loadConversationSummary(activeConversationId);
     // 追问（“它有什么优点”“第二点展开说说”）单独去做向量检索没有主语，先拼上上一轮的问题
@@ -283,9 +348,10 @@ chatRouter.post("/", async (req, res) => {
     writeEvent(res, { type: "sources", sources });
     // 完整结束后保存；中途被停止的在 catch 里另存一份并标记为未完成
     if (answer) {
-      const messageId = await saveAssistantMessage(activeConversationId, answer, sources);
-      // 告诉前端这条回答的消息 id，点踩时用它关联反馈
-      writeEvent(res, { type: "saved", messageId });
+      const retrievalMeta = buildRetrievalMeta();
+      const messageId = await saveAssistantMessage(activeConversationId, answer, sources, false, retrievalMeta);
+      // 告诉前端这条回答的消息 id 和检索诊断，点踩时用它关联反馈
+      writeEvent(res, { type: "saved", messageId, retrievalMeta });
     }
     // 追问建议不入库，仅随本次回答展示
     if (answer && !controller.signal.aborted) {
@@ -306,7 +372,7 @@ chatRouter.post("/", async (req, res) => {
       const cited = citedIndexes(answer);
       invalidCitations = [...cited].filter((index) => index < 1 || index > retrieved.length).length;
       const sources = retrieved.filter((source) => cited.has(source.index));
-      await saveAssistantMessage(activeConversationId, answer, sources, true).catch((saveError: unknown) =>
+      await saveAssistantMessage(activeConversationId, answer, sources, true, retrieved.length > 0 ? buildRetrievalMeta() : undefined).catch((saveError: unknown) =>
         console.error("保存中止的回答失败", saveError),
       );
     }

@@ -85,11 +85,25 @@ export const syncMessages = async (conversationId: number, incoming: ChatMessage
 };
 
 // incomplete 表示这条回答没有生成完（用户主动停止或关闭页面），前端会提示内容不完整。
+// retrievalMeta 是本次回答的检索诊断（分块、分数、耗时、配置快照），点踩后可以回放。
 // 返回新消息 id，前端点踩时要靠它关联反馈
-export const saveAssistantMessage = async (conversationId: number, content: string, citations: object[], incomplete = false) => {
+export const saveAssistantMessage = async (
+  conversationId: number,
+  content: string,
+  citations: object[],
+  incomplete = false,
+  retrievalMeta?: object,
+) => {
   const [result] = await pool.query<ResultSetHeader>(
-    "INSERT INTO messages (user_id, conversation_id, role, content, citations, incomplete) VALUES (?, ?, 'assistant', ?, ?, ?)",
-    [currentUserId(), conversationId, content, JSON.stringify(citations), incomplete ? 1 : 0],
+    "INSERT INTO messages (user_id, conversation_id, role, content, citations, incomplete, retrieval_meta) VALUES (?, ?, 'assistant', ?, ?, ?, ?)",
+    [
+      currentUserId(),
+      conversationId,
+      content,
+      JSON.stringify(citations),
+      incomplete ? 1 : 0,
+      retrievalMeta ? JSON.stringify(retrievalMeta) : null,
+    ],
   );
   await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", [conversationId]);
   return result.insertId;

@@ -40,8 +40,8 @@ const base = {
 const completeDetail = {
   ...base,
   messages: [
-    { id: 1, role: "user" as const, content: "问题", citations: null, incomplete: false },
-    { id: 2, role: "assistant" as const, content: "完整回答", citations: [source], incomplete: false },
+    { id: 1, role: "user" as const, content: "问题", citations: null, incomplete: false, retrievalMeta: null },
+    { id: 2, role: "assistant" as const, content: "完整回答", citations: [source], incomplete: false, retrievalMeta: null },
   ],
 };
 
@@ -49,9 +49,9 @@ const completeDetail = {
 const stoppedDetail = {
   ...base,
   messages: [
-    { id: 1, role: "user" as const, content: "问题", citations: null, incomplete: false },
-    { id: 2, role: "assistant" as const, content: "完整回答", citations: [source], incomplete: false },
-    { id: 3, role: "assistant" as const, content: "被停止的半截回答", citations: null, incomplete: true },
+    { id: 1, role: "user" as const, content: "问题", citations: null, incomplete: false, retrievalMeta: null },
+    { id: 2, role: "assistant" as const, content: "完整回答", citations: [source], incomplete: false, retrievalMeta: null },
+    { id: 3, role: "assistant" as const, content: "被停止的半截回答", citations: null, incomplete: true, retrievalMeta: null },
   ],
 };
 
