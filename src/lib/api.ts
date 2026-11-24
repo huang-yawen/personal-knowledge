@@ -75,8 +75,12 @@ export type ChatSource = {
   score: number;
 };
 
+export type ChatStageName = "retrieving" | "reranking" | "generating";
+
 export type ChatEvent =
   | { type: "conversation"; id: number }
+  // 后端处理到哪一步：检索 → 精排 → 生成，用于前端显示当前状态
+  | { type: "stage"; stage: ChatStageName; hits?: number }
   | { type: "sources"; sources: ChatSource[] }
   | { type: "delta"; text: string }
   | { type: "followups"; items: string[] }

@@ -56,6 +56,7 @@ export function ChatPage() {
             </>
           )}
         </div>
+        <ChatStageStatus />
       </div>
       <div className="chat-workspace">
         <section className="chat-thread-shell" aria-label="AI 对话">
@@ -79,6 +80,26 @@ function PendingQuestion() {
     useChatStore.getState().setPendingQuestion(null);
   }, [pending, aui]);
   return null;
+}
+
+// 检索 / 精排 / 生成三个阶段的状态条：让用户知道慢在哪一步，而不是只看到一个转圈
+function ChatStageStatus() {
+  const stage = useChatStore((state) => state.stage);
+  if (!stage) return null;
+  const label =
+    stage.name === "retrieving"
+      ? "正在检索资料…"
+      : stage.name === "reranking"
+        ? "正在精排候选片段…"
+        : stage.hits
+          ? `已找到 ${stage.hits} 个片段，正在生成回答…`
+          : "知识库中没有检索到相关资料，正在生成回答…";
+  return (
+    <div className="chat-stage" role="status" aria-live="polite">
+      <span className="chat-stage-dot" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function ChatWelcome() {

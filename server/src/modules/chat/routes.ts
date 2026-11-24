@@ -158,7 +158,11 @@ const citedIndexes = (answer: string) => {
   return indexes;
 };
 
-const writeEvent = (res: Response, event: object) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+const writeEvent = (res: Response, event: object) => {
+  // 客户端断开后继续写会抛错或堆积；统一在这里挡掉，调用方不用感知连接状态
+  if (res.writableEnded || res.destroyed) return;
+  res.write(`data: ${JSON.stringify(event)}\n\n`);
+};
 
 export const chatRouter = Router();
 
@@ -193,6 +197,14 @@ chatRouter.post("/", async (req, res) => {
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
   });
+
+  // 检索 + 精排要几百毫秒到几秒，先推一个阶段事件，别让用户以为卡住了
+  writeEvent(res, { type: "stage", stage: "retrieving" });
+
+  // 长连接心跳：代理和浏览器可能把长时间没有数据的连接判成空闲
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) res.write(": ping\n\n");
+  }, 15_000);
 
   // 用户点击停止或关闭页面时，同步中止对模型服务的请求
   const controller = new AbortController();
@@ -236,11 +248,18 @@ chatRouter.post("/", async (req, res) => {
       stats: retrievalStats,
       // 判断相关性用用户原话，而不是拼接过的检索串
       rerankQuery: question,
+      // 精排是检索里最慢的一段，单独告诉前端现在卡在哪
+      onStage: (stage) => {
+        if (!controller.signal.aborted) writeEvent(res, { type: "stage", stage });
+      },
     }).catch((error: unknown) => {
       console.error("检索失败", error);
       throw new ModelError(describeRetrievalError(error));
     });
     retrievalMs = Date.now() - retrievalStartedAt;
+    if (!controller.signal.aborted) {
+      writeEvent(res, { type: "stage", stage: "generating", hits: chunks.length });
+    }
     hits = chunks.length;
     scores = chunks.map((chunk) => Number(chunk.score.toFixed(3)));
     // 精排后第一条不一定是向量分最高的那条，所以取最大值
@@ -284,6 +303,7 @@ chatRouter.post("/", async (req, res) => {
       );
     }
   } finally {
+    clearInterval(heartbeat);
     res.end();
     // 回答结束后按需刷新对话摘要：不阻塞本次响应，下一轮提问时就能用上。
     // 放在响应之后是因为它要额外调一次模型，不该拖慢首字

@@ -46,6 +46,14 @@ a.nav-item:visited { color: var(--text); }
 .chat-page { background: var(--surface); }
 .chat-toolbar { min-height: 56px; padding: 0 16px; border-bottom: 0; background: transparent; }
 .chat-toolbar > p { display: none; }
+
+/* 回答阶段状态：检索 → 精排 → 生成。只做提示，不占消息内容 */
+.chat-stage { margin-left: auto; min-width: 0; max-width: 55%; height: 26px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-soft); color: var(--muted); font-size: 12px; }
+.chat-stage > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-stage-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: chat-stage-pulse 1.2s ease-in-out infinite; }
+@keyframes chat-stage-pulse { 0%, 100% { opacity: .35; transform: scale(.9); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .chat-stage-dot { animation: none; opacity: .8; } }
+@media (max-width: 760px) { .chat-stage { max-width: 58%; padding: 0 8px; font-size: 11px; } }
 .library-selector { height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; font-size: 16px; font-weight: 600; }
 .library-selector:hover { background: var(--hover); }
 .chat-workspace { grid-template-columns: minmax(0, 1fr); }

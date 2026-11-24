@@ -62,6 +62,7 @@ beforeEach(() => {
   useChatStore.setState({
     knowledgeBaseIds: [],
     sources: [],
+    stage: null,
     conversations: [],
     conversationQuery: "",
     showArchived: false,
@@ -116,6 +117,17 @@ test("新建对话会清空状态并换掉运行时 key", async () => {
   expect(state.initialMessages).toEqual([]);
   expect(state.sources).toEqual([]);
   expect(state.threadKey).toBe(before + 1);
+});
+
+test("阶段状态在新建和切换对话时都会清空", async () => {
+  useChatStore.getState().setStage({ name: "retrieving" });
+  useChatStore.getState().newConversation();
+  expect(useChatStore.getState().stage).toBeNull();
+
+  getConversation.mockResolvedValue(completeDetail);
+  useChatStore.getState().setStage({ name: "generating", hits: 3 });
+  await useChatStore.getState().openConversation(7);
+  expect(useChatStore.getState().stage).toBeNull();
 });
 
 test("删除当前打开的对话后回到新对话并刷新列表", async () => {

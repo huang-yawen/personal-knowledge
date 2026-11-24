@@ -154,6 +154,16 @@ RETRIEVAL_HYBRID=true
 - **重新生成/编辑消息**会让旧摘要作废（因为它可能引用了已被删除的内容），下次重新累积。
 - 相关参数在 `server/src/config.ts` 的 `chat` 段：`maxHistoryMessages`、`summaryMinMessages`、`summaryMaxChars`、`summaryInputChars`。
 
+### 流式阶段提示
+
+`/api/chat` 的 SSE 除了消息事件，还会发 `stage`：
+
+- `retrieving`：开始检索；
+- `reranking`：即将调用精排（仅在开启精排且候选多于一条时）；
+- `generating`：检索完成，带 `hits`（进入提示词的资料条数）。
+
+前端在对话工具栏显示「正在检索资料… / 正在精排候选片段… / 已找到 N 个片段，正在生成回答…」，回答结束、报错或用户停止时自动清除。连接每 15 秒发一行 `: ping` 注释心跳，前端的 SSE 解析器会忽略注释。
+
 ## 部署
 
 推荐结构：nginx 托管前端构建产物并反代 `/api`；后端和 Qdrant 只监听 127.0.0.1；MySQL 不对外。`deploy/` 下有可直接修改使用的模板：

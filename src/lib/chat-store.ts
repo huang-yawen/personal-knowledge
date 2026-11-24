@@ -6,14 +6,21 @@ import {
   listConversations,
   updateConversation,
   type ChatSource,
+  type ChatStageName,
   type ConversationDto,
 } from "@/lib/api";
+
+// 当前回答处于哪个阶段；hits 只在 generating 时有意义
+export type ChatStage = { name: ChatStageName; hits?: number };
 
 type ChatState = {
   // 提问的知识库范围，空数组表示全部知识库
   knowledgeBaseIds: number[];
   // 当前对话最近一次回答的引用来源，由问答适配器写入、右侧面板读取
   sources: ChatSource[];
+  // 当前回答所处的阶段，null 表示空闲
+  stage: ChatStage | null;
+  setStage: (stage: ChatStage | null) => void;
   conversations: ConversationDto[];
   // 侧栏的搜索词和“已归档”视图，刷新列表时沿用
   conversationQuery: string;
@@ -41,6 +48,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   knowledgeBaseIds: [],
   pendingQuestion: null,
   sources: [],
+  stage: null,
   conversations: [],
   conversationQuery: "",
   showArchived: false,
@@ -50,6 +58,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   setPendingQuestion: (pendingQuestion) => set({ pendingQuestion }),
   setKnowledgeBaseIds: (knowledgeBaseIds) => set({ knowledgeBaseIds }),
   setSources: (sources) => set({ sources }),
+  setStage: (stage) => set({ stage }),
   setConversationId: (conversationId) => set({ conversationId }),
   setConversationFilter: async (conversationQuery, showArchived) => {
     set({ conversationQuery, showArchived });
@@ -66,6 +75,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       conversationId: id,
       knowledgeBaseIds: conversation.knowledgeBaseIds,
       sources: lastAnswer?.citations ?? [],
+      // 切对话时上一个回答的阶段一定已经结束，避免状态串到新对话
+      stage: null,
       initialMessages: conversation.messages.map((message) => ({
         id: String(message.id),
         role: message.role,
@@ -79,7 +90,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },  
   newConversation: () =>
-    set((state) => ({ conversationId: null, sources: [], initialMessages: [], threadKey: state.threadKey + 1 })),
+    set((state) => ({ conversationId: null, sources: [], stage: null, initialMessages: [], threadKey: state.threadKey + 1 })),
   patchConversation: async (id, patch) => {
     await updateConversation(id, patch);
     await get().loadConversations();

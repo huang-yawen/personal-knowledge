@@ -15,7 +15,7 @@ const ATTACHMENT_PARTS = new Set(["file", "image", "audio"]);
 // 调用后端 /api/chat：先收到对话 id 和引用来源，再逐段收到回答文字
 const chatAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const { knowledgeBaseIds, conversationId, threadKey, setSources, setConversationId } = useChatStore.getState();
+    const { knowledgeBaseIds, conversationId, threadKey, setSources, setStage, setConversationId } = useChatStore.getState();
     // 回答期间用户可能切换了对话，旧回答不能再写入新对话的状态
     const isCurrentThread = () => useChatStore.getState().threadKey === threadKey;
     setSources([]);
@@ -37,24 +37,32 @@ const chatAdapter: ChatModelAdapter = {
     let text = "";
     let sources: ChatSource[] = [];
     let followups: string[] = [];
-    for await (const event of streamChat(history, knowledgeBaseIds, conversationId, abortSignal)) {
-      if (event.type === "conversation") {
-        if (isCurrentThread()) setConversationId(event.id);
-      } else if (event.type === "sources") {
-        sources = event.sources;
-        if (isCurrentThread()) setSources(event.sources);
-        // 来源在回答结束后才到达，需要再更新一次消息才能显示出来
-        yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
-      } else if (event.type === "delta") {
-        text += event.text;
-        yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
-      } else if (event.type === "followups") {
-        followups = event.items;
-        yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
-      } else if (event.type === "done") {
-        // 刷新列表，让新对话出现、标题和排序更新
-        useChatStore.getState().loadConversations().catch(console.error);
-      } else if (event.type === "error") throw new Error(event.message);
+    try {
+      for await (const event of streamChat(history, knowledgeBaseIds, conversationId, abortSignal)) {
+        if (event.type === "conversation") {
+          if (isCurrentThread()) setConversationId(event.id);
+        } else if (event.type === "stage") {
+          // 只更新状态栏，不写进消息内容，避免污染历史记录
+          if (isCurrentThread()) setStage({ name: event.stage, hits: event.hits });
+        } else if (event.type === "sources") {
+          sources = event.sources;
+          if (isCurrentThread()) setSources(event.sources);
+          // 来源在回答结束后才到达，需要再更新一次消息才能显示出来
+          yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+        } else if (event.type === "delta") {
+          text += event.text;
+          yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+        } else if (event.type === "followups") {
+          followups = event.items;
+          yield { content: [{ type: "text", text }], metadata: { custom: { sources, followups } } };
+        } else if (event.type === "done") {
+          // 刷新列表，让新对话出现、标题和排序更新
+          useChatStore.getState().loadConversations().catch(console.error);
+        } else if (event.type === "error") throw new Error(event.message);
+      }
+    } finally {
+      // 正常结束、报错、用户中断都要清掉阶段提示；切到别的对话时由那边自己管理
+      if (isCurrentThread()) setStage(null);
     }
   },
 };

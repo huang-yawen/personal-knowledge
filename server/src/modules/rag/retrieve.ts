@@ -106,6 +106,8 @@ export const retrieveChunks = async (
     hybrid?: boolean;
     // 精排用的查询（用户原话）。改写过的检索串适合找资料，但判断相关性用原话更准
     rerankQuery?: string;
+    // 检索过程中的阶段回调，用于向前端推送「正在精排」这类状态
+    onStage?: (stage: "reranking") => void;
   } = {},
 ): Promise<RetrievedChunk[]> => {
   const wantRerank = options.rerank ?? config.rerank.enabled;
@@ -191,6 +193,8 @@ export const retrieveChunks = async (
   if (!wantRerank) return chunks.slice(0, finalLimit);
 
   // 精排：null 表示服务不可用，退回当前顺序；空数组表示精排判定都不相关
+  // 只有真的会调用精排时才通知，避免前端显示一个不会发生的阶段
+  if (chunks.length > 1) options.onStage?.("reranking");
   const rerankStartedAt = Date.now();
   const reranked = await rerankChunks(options.rerankQuery ?? query, chunks, { limit: finalLimit });
   if (options.stats) {
