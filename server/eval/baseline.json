@@ -1,0 +1,84 @@
+{
+  "datasetVersion": 3,
+  "createdAt": "2026-11-24T09:47:45.836Z",
+  "config": {
+    "minScore": 0.35,
+    "rerank": false,
+    "rerankShadow": false,
+    "rerankMinScore": null,
+    "hybrid": false,
+    "embeddingModel": "BAAI/bge-m3",
+    "topK": 5,
+    "recallLimit": 20
+  },
+  "overall": {
+    "answered": 70,
+    "recallAt5": 0.8857142857142857,
+    "recallAt20": 1,
+    "mrr": 0.687857142857143,
+    "refusalRate": 0.1,
+    "avgMs": 254.35
+  },
+  "byType": [
+    {
+      "type": "semantic",
+      "count": 25,
+      "recallAt5": 0.8,
+      "recallAt20": 1,
+      "mrr": 0.6533333333333334,
+      "allCovered": 20,
+      "refused": null,
+      "avgMs": 271.96
+    },
+    {
+      "type": "literal",
+      "count": 15,
+      "recallAt5": 1,
+      "recallAt20": 1,
+      "mrr": 0.7611111111111111,
+      "allCovered": 15,
+      "refused": null,
+      "avgMs": 262.46666666666664
+    },
+    {
+      "type": "table",
+      "count": 12,
+      "recallAt5": 0.9166666666666666,
+      "recallAt20": 1,
+      "mrr": 0.75,
+      "allCovered": 11,
+      "refused": null,
+      "avgMs": 205.33333333333334
+    },
+    {
+      "type": "multi-hop",
+      "count": 10,
+      "recallAt5": 0.9,
+      "recallAt20": 1,
+      "mrr": 0.645,
+      "allCovered": 6,
+      "refused": null,
+      "avgMs": 264.3
+    },
+    {
+      "type": "followup",
+      "count": 8,
+      "recallAt5": 0.875,
+      "recallAt20": 1,
+      "mrr": 0.61875,
+      "allCovered": 7,
+      "refused": null,
+      "avgMs": 261.75
+    },
+    {
+      "type": "negative",
+      "count": 10,
+      "recallAt5": null,
+      "recallAt20": null,
+      "mrr": null,
+      "allCovered": null,
+      "refused": 1,
+      "avgMs": 241.1
+    }
+  ]
+}

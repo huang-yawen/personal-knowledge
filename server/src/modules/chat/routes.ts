@@ -313,8 +313,9 @@ chatRouter.post("/", async (req, res) => {
       knowledgeBaseIds,
       limit: settings.topK,
       stats: retrievalStats,
-      // 判断相关性用用户原话，而不是拼接过的检索串
-      rerankQuery: question,
+      // 精排用实际检索串：追问时它带着上一轮的主语，用原话（如“它有什么优点”）判断相关性会失准；
+      // 非追问时两者相同，没有额外影响
+      rerankQuery: retrievalQuery,
       // 精排是检索里最慢的一段，单独告诉前端现在卡在哪
       onStage: (stage) => {
         if (!controller.signal.aborted) writeEvent(res, { type: "stage", stage });

@@ -144,6 +144,49 @@ RETRIEVAL_HYBRID=true
 
 评估工具：`cd server && npm run eval`，读取 `server/eval/dataset.json`，输出 recall@k / MRR / 拒答率，报告写到 `server/eval/reports/`（已在 `.gitignore` 中）。
 
+#### 评估集 v3（80 条，分题型）
+
+`server/eval/dataset.json` 已扩到 80 条，按 6 类分层：`semantic` 25、`literal` 15、`table` 12、`multi-hop` 10、`followup` 8、`negative` 10。每条都带 `goldenAnswer`（留给生成层评估），检索判定仍用正文特征串。
+
+```bash
+cd server
+npm run eval:validate              # 不调用模型，校验 ID、followup 指向、contains 是否真在分块里
+npm run eval                       # 完整 80 条
+npm run eval -- --type=literal     # 只跑某一类，调参时用
+npm run eval -- --write-baseline   # 更新 server/eval/baseline.json
+npm run eval -- --check            # 比基线下降超过阈值时退出码非 0
+```
+
+当前基线（`server/eval/baseline.json`，bge-m3 + 向量下限 0.35，精排关）：
+
+| 题型 | 条数 | recall@5 | recall@20 | MRR@5 |
+| --- | --- | --- | --- | --- |
+| semantic | 25 | 80.0% | 100% | 0.653 |
+| literal | 15 | 100% | 100% | 0.761 |
+| table | 12 | 91.7% | 100% | 0.750 |
+| multi-hop | 10 | 90.0% | 100% | 0.645 |
+| followup | 8 | 87.5% | 100% | 0.619 |
+| 有答案合计 | 70 | **88.6%** | 100% | 0.688 |
+| 不可答 | 10 | 正确拒答 1/10 | - | - |
+
+同一套题开启精排、不设阈值（`RERANK_ENABLED=true npm run eval`）：
+
+| 题型 | recall@5 | MRR@5 | 多证据全中 |
+| --- | --- | --- | --- |
+| semantic | 100% | 0.947 | 25/25 |
+| literal | 100% | 0.956 | 15/15 |
+| table | 100% | 0.840 | 12/12 |
+| multi-hop | 100% | 0.883 | **10/10** |
+| followup | 75.0% | 0.688 | 6/8 |
+| 有答案合计 | **97.1%** | **0.892** | 68/70 |
+
+四个可直接抄走的结论：
+
+1. **精排仍然值得开**：recall@5 88.6% → 97.1%，MRR 0.688 → 0.892，multi-hop 全证据覆盖 6/10 → 10/10；代价是平均检索耗时 254ms → 871ms。
+2. **不设阈值时不可答题拒答率是 0/10**。这和之前的结论一致：拒答交给严格模式和 UI 标注，不要为了拒答把阈值设死、牺牲召回。
+3. **followup 是当前最弱的一档**（精排 6/8）。同时发现线上精排用的是用户原话，追问时没有主语、比评估口径更差——已改为用改写后的检索串（[chat/routes.ts](server/src/modules/chat/routes.ts)）。
+4. **literal 和 table 不再需要额外的关键词路**：bge-m3 在 28 个分块的小语料上已经 100% 召回；混合检索的收益要等语料变大、标识符更多时再验证。
+
 ### 长对话摘要
 
 发给模型的历史只保留最近 10 条消息。更早的内容会被压缩成一段摘要（`conversations.summary`），随提示词一起传下去，所以长对话不会在第 6 轮之后「忘记」前面说过什么。

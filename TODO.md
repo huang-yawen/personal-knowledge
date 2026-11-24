@@ -121,6 +121,7 @@
 - 回答反馈：assistant-ui 的点赞/点踩接入 `message_feedback`（迁移 019）；点踩先落库再弹原因，可补充说明并覆盖上一次；SSE 新增 `saved` 事件把消息 id 带回前端，历史消息打开对话时也带 id。
 - 行内引用：remark 插件把正文里的 `[1]` / `[2, 3]` 转成 `#cite-` 链接，前端渲染为可点击角标；生成中显示中性角标，无效编号标红并在来源下方汇总提示；服务端日志新增 `invalidCitations`。
 - 检索诊断：迁移 020 给 `messages` 加 `retrieval_meta`，随每条回答保存检索串、命中分块与分数、阶段耗时、无效引用数和配置快照；`saved` 事件带回前端，回答下方可展开 JSON；新增 `CHUNKER_VERSION` / `PROMPT_VERSION` 便于区分新旧回答。
+- 评估集 v3：从 23 条扩到 80 条，按 semantic / literal / table / multi-hop / followup / negative 分层，每条带 `goldenAnswer`；新增 `eval:validate`、`--type`、`--write-baseline`、`--check`；基线 `server/eval/baseline.json`（精排关 recall@5 88.6%，精排开 97.1%，multi-hop 全证据 6/10 → 10/10）。评估还发现线上精排用原话判断追问相关性会失准，已改为用改写后的检索串。
 - 导出个人数据改为流式：分页读取分块与消息、边查边写到 `server/tmp/`，写完再 `res.sendFile` 发送，内存占用与账号数据量无关。原实现把全部分块读进内存再 `JSON.stringify`，在生产配置 `MemoryMax=400M` 下，大账号导出会把后端进程打挂。
 
 ## 6. RAG 实施原则
