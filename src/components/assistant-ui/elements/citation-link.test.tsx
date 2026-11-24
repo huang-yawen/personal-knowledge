@@ -7,13 +7,14 @@ import { useReaderStore } from "@/lib/reader-store";
 const state = vi.hoisted(() => ({
   sources: [] as { index: number; chunkId: number; documentId: number; documentName: string; page: number | null; content: string; score: number }[],
   streaming: false,
+  incomplete: false,
 }));
 
-// CitationLink 只用到 useAuiState 的两个选择器，直接给它一个可控的假状态
+// CitationLink 只用到 useAuiState 的几个选择器，直接给它一个可控的假状态
 vi.mock("@assistant-ui/react", () => ({
   useAuiState: (selector: (value: unknown) => unknown) =>
     selector({
-      message: { metadata: { custom: { sources: state.sources } }, isLast: true },
+      message: { metadata: { custom: { sources: state.sources, incomplete: state.incomplete } }, isLast: true },
       thread: { isRunning: state.streaming },
     }),
 }));
@@ -24,6 +25,7 @@ afterEach(() => {
   cleanup();
   state.sources = [];
   state.streaming = false;
+  state.incomplete = false;
 });
 
 const source = {
@@ -61,6 +63,15 @@ test("回答结束后仍对不上来源，标红而不是可点击", () => {
 
   expect(container.querySelector(".citation-invalid")?.textContent).toBe("7");
   expect(screen.queryByRole("button")).toBeNull();
+});
+
+test("被停止的回答引用可能不全，不标红", () => {
+  state.sources = [];
+  state.incomplete = true;
+  const { container } = render(<CitationLink href="#cite-1" />);
+
+  expect(container.querySelector(".citation-pending")?.textContent).toBe("1");
+  expect(container.querySelector(".citation-invalid")).toBeNull();
 });
 
 test("一个链接里的多个编号各自渲染角标", () => {

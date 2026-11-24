@@ -11,6 +11,8 @@ import { useReaderStore } from "@/lib/reader-store";
 export function CitationLink({ href }: { href: string }) {
   const sources = useAuiState((state) => state.message.metadata.custom?.sources) as ChatSource[] | undefined;
   const streaming = useAuiState((state) => state.thread.isRunning && state.message.isLast);
+  // 被用户停止的回答引用可能没存全，不能按「引用了不存在的资料」处理
+  const incomplete = useAuiState((state) => state.message.metadata.custom?.incomplete) as boolean | undefined;
   const openReader = useReaderStore((state) => state.open);
 
   const numbers = href
@@ -37,7 +39,7 @@ export function CitationLink({ href }: { href: string }) {
             </button>
           );
         }
-        if (streaming) {
+        if (streaming || incomplete) {
           return <span key={number} className="citation-pending">{number}</span>;
         }
         return (
