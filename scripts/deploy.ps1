@@ -31,8 +31,8 @@ function Ok($text) { Write-Host "  ok   $text" -ForegroundColor Green }
 function Warn($text) { Write-Host "  !    $text" -ForegroundColor Yellow }
 function Fail($text) { Write-Host "  FAIL $text" -ForegroundColor Red; exit 1 }
 
-$sshArgs = @("-p", "$Port", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15")
-$scpArgs = @("-P", "$Port", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=15")
+$sshArgs = @("-p", "$Port", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3")
+$scpArgs = @("-P", "$Port", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10")
 if (Test-Path $KeyPath) {
   $sshArgs += @("-i", $KeyPath)
   $scpArgs += @("-i", $KeyPath)
@@ -42,12 +42,33 @@ if (Test-Path $KeyPath) {
 }
 $target = "$User@$Server"
 
+# 带重试的 SSH 执行（代理可能抖动导致 22 端口偶尔超时）
+function Ssh-Retry($cmd, $maxRetries = 3) {
+  for ($i = 1; $i -le $maxRetries; $i++) {
+    $out = & ssh @sshArgs $target $cmd 2>&1
+    $code = $LASTEXITCODE
+    if ($code -eq 0) { return $out }
+    Warn "SSH 第 $i 次尝试失败（退出码 $code），${maxRetries - $i} 次后重试..."
+    Start-Sleep -Seconds 3
+  }
+  Fail "SSH 达到最大重试次数，放弃执行：$cmd"
+}
+
+# 带重试的 SCP 上传
+function Scp-Retry($src, $dst, $maxRetries = 3) {
+  for ($i = 1; $i -le $maxRetries; $i++) {
+    & scp @scpArgs $src $dst 2>&1
+    $code = $LASTEXITCODE
+    if ($code -eq 0) { return }
+    Warn "SCP 第 $i 次尝试失败（退出码 $code），${maxRetries - $i} 次后重试..."
+    Start-Sleep -Seconds 3
+  }
+  Fail "SCP 达到最大重试次数，放弃上传：$src"
+}
+
 # ---------- 0. 连通性预检 ----------
 Step "检查服务器连通性"
-$probe = Test-NetConnection -ComputerName $Server -Port $Port -WarningAction SilentlyContinue
-if (-not $probe.TcpTestSucceeded) {
-  Fail "连不上 ${Server}:$Port —— 如果开着代理，请先给 $Server 加直连规则或临时关闭代理"
-}
+$probe = Ssh-Retry "echo connected"
 Ok "${Server}:$Port 可达"
 
 # ---------- 1. 本地构建 ----------
@@ -71,20 +92,17 @@ if (-not $SkipFrontend) {
 # ---------- 2. 上传 ----------
 if (-not $SkipFrontend) {
   Step "上传前端产物"
-  & scp @scpArgs $tarball "${target}:/tmp/pk-dist.tgz"
-  if ($LASTEXITCODE -ne 0) { Fail "上传失败" }
+  Scp-Retry $tarball "${target}:/tmp/pk-dist.tgz"
   Ok "已上传 /tmp/pk-dist.tgz"
 }
 
 Step "上传部署脚本"
-& scp @scpArgs "scripts/deploy-remote.sh" "${target}:/tmp/deploy-remote.sh"
-if ($LASTEXITCODE -ne 0) { Fail "上传部署脚本失败" }
+Scp-Retry "scripts/deploy-remote.sh" "${target}:/tmp/deploy-remote.sh"
 
 # ---------- 3. 远端执行 ----------
 $skip = if ($SkipFrontend) { "SKIP_FRONTEND=1" } else { "SKIP_FRONTEND=0" }
 Step "在服务器上执行部署"
-& ssh @sshArgs $target "$skip DOMAIN=$Domain bash /tmp/deploy-remote.sh"
-if ($LASTEXITCODE -ne 0) { Fail "服务器端部署失败" }
+Ssh-Retry "$skip DOMAIN=$Domain bash /tmp/deploy-remote.sh"
 
 # ---------- 4. 本地验证 ----------
 Step "从本机验证站点"

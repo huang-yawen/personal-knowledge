@@ -15,8 +15,12 @@ log() { printf '\n=== %s ===\n' "$1"; }
 log "拉取代码"
 cd "$APP"
 old=$(git rev-parse HEAD)
-git fetch --all -q
-git pull --ff-only -q
+# 网络抖动时 git fetch/pull 可能失败，若代码已是最新则不影响部署
+if ! git fetch --all -q 2>/dev/null; then
+  echo "! git fetch 失败（网络抖动？），跳过远程同步，使用本地代码"
+else
+  git pull --ff-only -q 2>/dev/null || echo "! git pull 失败（网络抖动？），使用本地代码"
+fi
 new=$(git rev-parse HEAD)
 if [ "$old" = "$new" ]; then
   echo "代码已是最新（${new:0:7}）"
