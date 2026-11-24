@@ -38,7 +38,10 @@ export const buildSystemPrompt = (chunks: RetrievedChunk[], style: ReplyStyle = 
 请直接回答“知识库中没有找到相关内容。”，并用一句话建议用户换个问法或先上传相关资料。使用与用户提问相同的语言回答。${tail}`;
     }
     const strictMaterials = chunks
-      .map((chunk, index) => `[${index + 1}] 《${chunk.documentName}》${chunk.page ? `第 ${chunk.page} 页` : ""}\n${chunk.content}`)
+      .map(
+        (chunk, index) =>
+          `[${index + 1}] 《${chunk.documentName}》${chunk.page ? `第 ${chunk.page} 页` : ""}${chunk.headingPath ? ` · ${chunk.headingPath}` : ""}\n${chunk.contextContent ?? chunk.content}`,
+      )
       .join("\n\n");
     return `你是个人知识库助手，当前为严格模式：只能依据下面的“资料”回答，不要使用你自己的知识，也不要推测。
 1. 回答中的每个事实都要在句末用 [编号] 标注来源，例如 [1]、[2]；不要标注不存在的编号。
@@ -57,7 +60,10 @@ ${strictMaterials}`;
 4. 使用与用户提问相同的语言回答。${tail}`;
   }
   const materials = chunks
-    .map((chunk, index) => `[${index + 1}] 《${chunk.documentName}》${chunk.page ? `第 ${chunk.page} 页` : ""}\n${chunk.content}`)
+    .map(
+      (chunk, index) =>
+        `[${index + 1}] 《${chunk.documentName}》${chunk.page ? `第 ${chunk.page} 页` : ""}${chunk.headingPath ? ` · ${chunk.headingPath}` : ""}\n${chunk.contextContent ?? chunk.content}`,
+    )
     .join("\n\n");
   return `你是个人知识库助手。下面的“资料”是从用户知识库中检索到的内容，可能与问题相关，也可能无关。
 1. 资料与问题相关时，优先依据资料回答，并在对应句末用 [编号] 标注来源，例如 [1]、[2]；不要标注不存在的编号。

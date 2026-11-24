@@ -6,6 +6,7 @@ import { searchPoints } from "./qdrant";
 import { rerankChunks } from "./rerank";
 import { searchKeywordChunks, type KeywordHit } from "./keyword";
 import { reciprocalRankFusion } from "./fuse";
+import { buildContext, type ChunkKind } from "../worker/chunk";
 import { currentUserId } from "../auth/context";
 
 export type RetrievedChunk = {
@@ -14,7 +15,12 @@ export type RetrievedChunk = {
   documentId: number;
   documentName: string;
   page: number | null;
+  // 命中的子块正文，用于评估与引用定位
   content: string;
+  // 父段上下文，进入提示词的是这个；旧分块没有父段时等于 content
+  contextContent?: string;
+  headingPath?: string | null;
+  kind?: ChunkKind;
   // 向量相似度；只被关键词命中的分块没有余弦相似度，这里是 0
   score: number;
   // 精排后的相关性分；未开启精排或精排降级时没有
@@ -168,8 +174,11 @@ export const retrieveChunks = async (
   }
 
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT c.id, c.knowledge_base_id, c.document_id, c.content, c.page_number, d.original_name
-     FROM document_chunks c JOIN documents d ON d.id = c.document_id
+    `SELECT c.id, c.knowledge_base_id, c.document_id, c.content, c.page_number,
+            c.heading_path, c.chunk_kind, d.original_name, s.content AS section_content
+     FROM document_chunks c
+     JOIN documents d ON d.id = c.document_id
+     LEFT JOIN document_sections s ON s.id = c.section_id
      WHERE c.id IN (?) AND c.user_id = ?`,
     [orderedIds, currentUserId()],
   );
@@ -178,6 +187,8 @@ export const retrieveChunks = async (
     const row = byId.get(chunkId);
     if (!row) return [];
     const dense = denseScore.get(chunkId);
+    const content = row.content as string;
+    const section = row.section_content as string | null;
     return [
       {
         chunkId,
@@ -185,7 +196,11 @@ export const retrieveChunks = async (
         documentId: row.document_id as number,
         documentName: row.original_name as string,
         page: row.page_number as number | null,
-        content: row.content as string,
+        content,
+        // 命中子块、喂父段：短块保证检索精度，父段保证上下文完整
+        contextContent: section ? buildContext(section, content) : content,
+        headingPath: (row.heading_path as string | null) ?? null,
+        kind: (row.chunk_kind as ChunkKind | null) ?? "text",
         score: dense ?? 0,
         matchedBy: dense === undefined ? "keyword" : keywordIds.has(chunkId) ? "both" : "dense",
       },

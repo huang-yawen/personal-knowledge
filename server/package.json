@@ -10,6 +10,7 @@
     "invite": "tsx --env-file=.env src/scripts/invite.ts",
     "demo:seed": "tsx --env-file=.env src/scripts/demo-seed.ts",
     "reindex": "tsx --env-file=.env src/scripts/reindex.ts",
+    "rechunk": "tsx --env-file=.env src/scripts/rechunk.ts",
     "reset-password": "tsx --env-file=.env src/scripts/reset-password.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "eval": "tsx --env-file=.env eval/run.ts",

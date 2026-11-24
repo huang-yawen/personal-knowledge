@@ -67,7 +67,8 @@ export const rerankChunks = async (
       body: JSON.stringify({
         model: config.rerank.model,
         query,
-        documents: chunks.map((chunk) => chunk.content),
+        // 精排看父段上下文：子块太短会丢掉判断相关性所需的信息，父段最多 1500 字
+        documents: chunks.map((chunk) => chunk.contextContent ?? chunk.content),
         top_n: options.limit ?? chunks.length,
         return_documents: false,
       }),

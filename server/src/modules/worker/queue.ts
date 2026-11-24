@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { RowDataPacket } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { config } from "../../config";
 import { pool } from "../../db";
 import { recordActivity } from "../activity/repository";
 import { embedTexts } from "../rag/embedding";
 import { deleteVectors, upsertPoints } from "../rag/qdrant";
-import { chunkText } from "./chunk";
+import { CHUNKER_VERSION, chunkPages } from "./chunk";
 import { runAsUser } from "../auth/context";
 import { parseFile } from "./parse";
 import { summarizeDocument } from "./summary";
@@ -40,8 +40,8 @@ const embedChunks = async (id: number, userId: number, knowledgeBaseId: number) 
   );
 };
 
-// 解析 → 分块 → 写入 document_chunks → 向量化写入 Qdrant，全部成功后状态为 done
-const processDocument = async (id: number) => {
+// 解析 → 分块 → 写入 sections / document_chunks → 向量化写入 Qdrant，全部成功后状态为 done
+export const processDocument = async (id: number, options: { summarize?: boolean; activity?: boolean } = {}) => {
   const [rows] = await pool.query<RowDataPacket[]>(
     "SELECT user_id, knowledge_base_id, stored_path, mime_type, original_name FROM documents WHERE id = ?",
     [id],
@@ -56,27 +56,48 @@ const processDocument = async (id: number) => {
       parseFile(path.join(config.uploadDir, doc.stored_path), doc.mime_type),
     );
 
-    // 分块不跨页，保证每个块的页码准确
-    const values: (number | string | null)[][] = [];
-    for (const { page, text } of pages) {
-      for (const content of chunkText(text)) {
-        values.push([doc.user_id, doc.knowledge_base_id, id, values.length, content, page, randomUUID()]);
-      }
-    }
-    if (values.length === 0) throw new Error("未提取到文本，可能是扫描版 PDF 或空文件");
+    // 按标题/页切父段，再切子块；子块用于检索，父段用于给模型补上下文
+    const { sections, chunks } = chunkPages(pages);
+    if (chunks.length === 0) throw new Error("未提取到文本，可能是扫描版 PDF 或空文件");
 
-    // 先清掉旧分块再写入，重复处理同一文档不会产生重复数据
+    // 先清掉旧分块和旧父段再写入，重复处理同一文档不会产生重复数据
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await conn.query("DELETE FROM document_chunks WHERE document_id = ?", [id]);
+      await conn.query("DELETE FROM document_sections WHERE document_id = ?", [id]);
+
+      const sectionIds: number[] = [];
+      for (const [sectionIndex, section] of sections.entries()) {
+        const [result] = await conn.query<ResultSetHeader>(
+          "INSERT INTO document_sections (document_id, section_index, heading_path, content, page_start, page_end) VALUES (?, ?, ?, ?, ?, ?)",
+          [id, sectionIndex, section.headingPath, section.content, section.pageStart, section.pageEnd],
+        );
+        sectionIds.push(result.insertId);
+      }
+
+      const values = chunks.map((chunk, index) => [
+        doc.user_id,
+        doc.knowledge_base_id,
+        id,
+        index,
+        chunk.content,
+        chunk.page,
+        randomUUID(),
+        sectionIds[chunk.sectionIndex],
+        chunk.headingPath,
+        chunk.kind,
+      ]);
       for (let i = 0; i < values.length; i += INSERT_BATCH) {
         await conn.query(
-          "INSERT INTO document_chunks (user_id, knowledge_base_id, document_id, chunk_index, content, page_number, vector_point_id) VALUES ?",
+          "INSERT INTO document_chunks (user_id, knowledge_base_id, document_id, chunk_index, content, page_number, vector_point_id, section_id, heading_path, chunk_kind) VALUES ?",
           [values.slice(i, i + INSERT_BATCH)],
         );
       }
-      await conn.query("UPDATE documents SET status = 'embedding', error_message = NULL WHERE id = ?", [id]);
+      await conn.query("UPDATE documents SET status = 'embedding', error_message = NULL, chunker_version = ? WHERE id = ?", [
+        CHUNKER_VERSION,
+        id,
+      ]);
       await conn.commit();
     } catch (error) {
       await conn.rollback();
@@ -91,9 +112,9 @@ const processDocument = async (id: number) => {
       throw new Error(`向量化失败：${error instanceof Error ? error.message : String(error)}`);
     }
     await setStatus(id, "done");
-    await recordActivity(doc.user_id, "doc_ready", doc.original_name, id);
-    // 摘要在后台生成，不阻塞队列里的下一份文档
-    void summarizeDocument(id, doc.user_id);
+    if (options.activity !== false) await recordActivity(doc.user_id, "doc_ready", doc.original_name, id);
+    // 摘要在后台生成，不阻塞队列里的下一份文档；重新切片时不需要重复生成
+    if (options.summarize !== false) void summarizeDocument(id, doc.user_id);
   } catch (error) {
     console.error(`文档 ${id} 处理失败`, error);
     const message = error instanceof Error ? error.message : String(error);
@@ -102,7 +123,7 @@ const processDocument = async (id: number) => {
         message.slice(0, 1000),
         id,
       ]);
-      await recordActivity(doc.user_id, "doc_failed", doc.original_name, id);
+      if (options.activity !== false) await recordActivity(doc.user_id, "doc_failed", doc.original_name, id);
     } catch (markError) {
       // 数据库不可用时连“标记失败”都会失败：留着 parsing 状态，重启后 resumeQueue 会重新排队
       console.error(`文档 ${id} 标记失败状态时出错`, markError);

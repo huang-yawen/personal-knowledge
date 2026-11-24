@@ -10,6 +10,18 @@ test("有资料时按编号放入提示词，并带页码", () => {
   assert.match(prompt, /\[1\] 《手册》第 3 页\n第一段资料/);
 });
 
+test("有父段上下文时，提示词用父段并带上标题路径", () => {
+  const withContext = {
+    ...chunk,
+    content: "命中的子块",
+    contextContent: "父段里完整的上下文",
+    headingPath: "检索调优 > 精排",
+  } as RetrievedChunk;
+  const prompt = buildSystemPrompt([withContext]);
+  assert.match(prompt, /\[1\] 《手册》第 3 页 · 检索调优 > 精排\n父段里完整的上下文/);
+  assert.doesNotMatch(prompt, /命中的子块/);
+});
+
 test("没有资料时引导使用通用知识回答", () => {
   assert.match(buildSystemPrompt([]), /没有检索到相关资料/);
 });

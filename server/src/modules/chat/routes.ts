@@ -267,6 +267,9 @@ chatRouter.post("/", async (req, res) => {
       score: Number(chunk.score.toFixed(3)),
       rerankScore: chunk.rerankScore === undefined ? null : Number(chunk.rerankScore.toFixed(3)),
       matchedBy: chunk.matchedBy,
+      headingPath: chunk.headingPath ?? null,
+      kind: chunk.kind ?? "text",
+      contextChars: (chunk.contextContent ?? chunk.content).length,
     })),
     config: {
       topK: requestSettings?.topK ?? config.retrieval.topK,

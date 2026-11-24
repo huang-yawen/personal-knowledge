@@ -153,6 +153,9 @@ export type RetrievalMeta = {
     score: number;
     rerankScore: number | null;
     matchedBy: "dense" | "keyword" | "both";
+    headingPath?: string | null;
+    kind?: "text" | "table" | "code";
+    contextChars?: number;
   }[];
   config: Record<string, unknown>;
 };
